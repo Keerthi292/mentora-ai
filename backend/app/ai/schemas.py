@@ -1,0 +1,16 @@
+from typing import Annotated
+
+from pydantic import BaseModel, StringConstraints
+
+MessageText = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=2000),
+]
+
+
+class ChatRequest(BaseModel):
+    message: MessageText
+
+
+class ChatResponse(BaseModel):
+    response: str

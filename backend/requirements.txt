@@ -6,3 +6,8 @@ sqlalchemy
 alembic
 psycopg2-binary
 python-dotenv
+mcp[cli]<2
+
+# Testing
+pytest
+httpx

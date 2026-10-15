@@ -1,0 +1,18 @@
+/* App-wide styles. Bootstrap handles most styling; add custom rules here. */
+body {
+  min-height: 100vh;
+}
+
+/* ---- AI Mentor chat ---- */
+
+/* Fill the screen below the navbar so only the message list scrolls */
+.chat-page {
+  height: calc(100vh - 56px - 3rem); /* navbar height + page padding */
+  min-height: 420px;
+}
+
+.chat-bubble {
+  max-width: 75%;
+  white-space: pre-wrap; /* keep line breaks from the user and the mentor */
+  overflow-wrap: anywhere; /* long words/URLs wrap instead of overflowing */
+}

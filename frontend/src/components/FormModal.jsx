@@ -56,7 +56,7 @@ function FormModal({ title, fields, initialValues, submitLabel = "Save", onSubmi
           <button type="button" className="btn btn-outline-secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="btn btn-primary" disabled={saving}>
+          <button type="submit" className="btn btn-gradient" disabled={saving}>
             {saving ? "Saving..." : submitLabel}
           </button>
         </div>

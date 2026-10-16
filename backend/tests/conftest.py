@@ -56,6 +56,31 @@ def engine():
     engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def no_real_gemini(monkeypatch):
+    """Never call the real Gemini API from tests (no key needed, no quota used).
+
+    Tests that need a reply use the `fake_gemini` fixture in test_ai_chat.py.
+    """
+    from pydantic import SecretStr
+
+    from app.ai import llm_client
+
+    def _refuse(*args, **kwargs):
+        raise AssertionError("Tests must not call the real Gemini API; use the fake_gemini fixture.")
+
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", SecretStr("test-key-not-real"))
+
+
+@pytest.fixture(autouse=True)
+def upload_dir(tmp_path, monkeypatch):
+    """Uploaded files go to a temporary folder, never backend/uploads."""
+    folder = tmp_path / "uploads"
+    monkeypatch.setattr(settings, "UPLOAD_DIR", folder)
+    return folder
+    monkeypatch.setattr(llm_client, "_create_client", _refuse)
+
+
 @pytest.fixture
 def db(engine):
     """A session whose changes are rolled back after the test.

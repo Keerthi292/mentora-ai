@@ -9,10 +9,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tiptap/extension-image": "^3.32.0",
+    "@tiptap/extensions": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/react": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
     "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-router-dom": "^7.18.4"
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.18.4",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.2",

@@ -7,10 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.mcp_server import mcp, mcp_app
 from app.routers import ai as ai_router
 from app.routers import career_goals as career_goals_router
+from app.routers import dashboard as dashboard_router
 from app.routers import learning_goals as learning_goals_router
 from app.routers import learning_progress as learning_progress_router
 from app.routers import projects as projects_router
 from app.routers import skills as skills_router
+from app.routers import uploads as uploads_router
 from app.routers import user_skills as user_skills_router
 from app.seed import run_seed
 
@@ -49,6 +51,8 @@ app.include_router(user_skills_router.router)
 app.include_router(learning_progress_router.router)
 app.include_router(career_goals_router.router)
 app.include_router(projects_router.router)
+app.include_router(dashboard_router.router)
+app.include_router(uploads_router.router)
 
 
 @app.get("/")

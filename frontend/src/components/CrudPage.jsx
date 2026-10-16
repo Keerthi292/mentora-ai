@@ -29,7 +29,7 @@ function CrudPage({ title, itemName, apiPath, fields, columns, getLabel, emptyTe
     <>
       <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <h1 className="h3 mb-0">{title}</h1>
-        <button type="button" className="btn btn-primary" onClick={() => setEditing("new")}>
+        <button type="button" className="btn btn-gradient" onClick={() => setEditing("new")}>
           + Add {itemName}
         </button>
       </div>

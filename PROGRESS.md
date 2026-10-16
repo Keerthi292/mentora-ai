@@ -3,7 +3,7 @@
 A record of what has been built, in the order it was done.
 For setup and run instructions, see [README.md](README.md).
 
-**Last updated:** 2026-10-15
+**Last updated:** 2026-10-16
 
 ---
 
@@ -11,16 +11,22 @@ For setup and run instructions, see [README.md](README.md).
 
 | Area | Status |
 |---|---|
-| AI chat API (mock LLM, normal + streaming) | ✅ Done |
+| AI chat API (normal + streaming) | ✅ Done |
 | MCP server at `/mcp` | ✅ Done |
-| Database (PostgreSQL, 7 tables, Alembic migration) | ✅ Done |
+| Database (PostgreSQL, 8 tables, 2 Alembic migrations) | ✅ Done |
 | CRUD APIs for all 6 resources | ✅ Done |
 | Single demo user (no authentication) | ✅ Done |
-| Backend tests (pytest) | ✅ Done (50 tests passing) |
+| Backend tests (pytest) | ✅ Done (130 tests passing) |
 | Frontend setup (React + Vite + Bootstrap) | ✅ Done |
 | Frontend pages: Skills, Goals, Career, Projects | ✅ Done |
 | AI Mentor chat page (streaming) | ✅ Done |
-| Real LLM | ⏳ Not started (mock only) |
+| Real LLM (Google Gemini) | ✅ Done |
+| Mentor uses the user's skills, goals, projects | ✅ Done |
+| Conversation history + ChatGPT-style chat list | ✅ Done |
+| Dark theme + animated, interactive Mentor UI | ✅ Done |
+| Dashboard (stats, goal progress, AI daily tip) | ✅ Done |
+| Goals/Career cards, rich project write-ups, chat file uploads | ✅ Done |
+| Gemini retries, edit messages, rename chats | ✅ Done |
 | Authentication | ⏳ Not started (on purpose) |
 
 ---
@@ -36,8 +42,8 @@ For setup and run instructions, see [README.md](README.md).
 - MCP Streamable HTTP server mounted at `/mcp` with two tools, `ask_mentor` and `ping`
   (`mcp<2` is pinned because mcp 2.x renamed `FastMCP`).
 
-> The AI is a **mock**: `llm_client.py` returns a fixed sentence that repeats your
-> message. No LLM (OpenAI, Claude, Gemini, ...) is connected.
+> At first the AI was a **mock** that repeated your message. It now calls Gemini
+> (see section 9).
 
 ---
 
@@ -176,12 +182,176 @@ the input box now gets focus back after a reply.
 
 ---
 
+## 9. Gemini integration
+
+- `backend/app/ai/llm_client.py`: the mock was replaced with Gemini calls through the official
+  Google Gen AI SDK (`google-genai>=2,<3`). `generate_response()` for `/api/ai/chat`,
+  `stream_response()` for `/api/ai/chat/stream` (real token streaming).
+- Settings in `config.py`: `GEMINI_API_KEY` (a `SecretStr`, so it never shows in logs),
+  `GEMINI_MODEL` (default `gemini-3.5-flash`), `GEMINI_TIMEOUT_SECONDS` (default 60).
+  `backend/.env.example` documents them.
+- Failures raise `LLMError` with a user-safe message: `/api/ai/chat` returns `503` (not
+  configured / key rejected / model not found / Gemini down), `429` (rate limit) or `504`
+  (timeout); the stream sends a `data: {"error": ...}` event with no `[DONE]`. No fake replies.
+- If the browser disconnects, the Gemini stream is closed too.
+- The frontend and SSE format are unchanged. The MCP `ask_mentor` tool now uses Gemini as well.
+- Tests: Gemini is faked (`fake_gemini` fixture); an autouse guard in `conftest.py` fails any
+  test that would create a real client.
+
+**Verified:** 68 passed. Live server checked without a key (clean `503` / error event) and against
+the real Gemini API with a deliberately invalid key (clean "rejected the API key" error; key not
+in the logs). A successful real reply has **not** been checked yet, since no real key was set.
+
+---
+
+## 10. Cleanup and uv
+
+- Removed generated caches, the empty `frontend/public/` and Alembic's placeholder README.
+- The backend now uses **uv**: `backend/pyproject.toml` (dependencies, a `dev` group with pytest,
+  and the pytest settings) and `backend/uv.lock` replace `requirements.txt` and `pytest.ini`.
+- `backend/main.py` starts the server: `uv run main.py` (port 8002, auto-reload on `app/` changes).
+- `config.py` finds `backend/.env` by absolute path, so the starting folder doesn't matter.
+
+**Verified:** `uv run pytest`: 68 passed. `uv run main.py` served the root, `/api/skills`, both AI
+endpoints (real Gemini replies) and reloaded after a file change.
+
+---
+
+## 11. Personal mentor (user profile in the prompt)
+
+- `backend/app/ai/context.py`: `build_user_profile(db, user_id)` reads the user's skills (catalog
+  + skill levels), learning goals with their latest progress, career goals and projects through the
+  existing repositories, and formats them as text (max 20 per list, descriptions cut at 300 chars).
+- `backend/app/ai/prompts.py`: `build_system_prompt(profile)` adds the profile inside
+  `<user_profile>` with instructions to personalise answers and not ask for listed information.
+- Both chat endpoints and the MCP `ask_mentor` tool load the profile of the current (demo) user.
+  If the database fails, the mentor answers without the profile instead of erroring.
+- The profile is background knowledge: greetings get a short "what's on your mind?" reply, and
+  skills/goals come up only when the question needs them (e.g. "what should I learn next?").
+
+**Verified:** 73 passed (profile contents, latest progress only, other users' data excluded, empty
+profile, database failure, long text shortened). Live with Gemini: asked "What skills do I have?",
+it named the saved skills (python, LLM MCp) and suggested adding goals.
+
+---
+
+## 12. Conversation history and chat list
+
+- `ChatRequest` gained `history`: earlier `{role: "user" | "assistant", content}` messages, oldest
+  first (max 200 items, 20,000 chars each). `message` and the response/SSE formats are unchanged.
+- `app/ai/agent.py`: `recent_history()` keeps the newest `CHAT_HISTORY_LIMIT` messages (default 20,
+  `0` = none) and drops a leading reply so history starts with a question.
+- `app/ai/llm_client.py`: sends history as Gemini `user` / `model` turns; back-to-back messages from
+  the same side (e.g. after a failed reply) are joined into one turn.
+- Frontend: `MentorChat.jsx` has a ChatGPT-style sidebar (+ New chat, chats grouped by date, delete
+  with confirmation; a slide-in panel on phones). `services/chatStorage.js` saves chats in
+  localStorage (max 50). Only real messages are sent as history; failed empty replies are skipped.
+- No new database table: chats live in the browser for now.
+
+**Verified:** 84 passed (history order, limit, limit 0, joined turns, invalid history → 422). Live:
+Gemini answered a follow-up from history. Browser (Playwright, Chrome): 17 checks passed (follow-up
+answered "Teal." from the earlier message, new chat, switching, reload keeps chats, delete, phone
+panel, no horizontal scroll).
+
+---
+
+## 13. Dark theme and interactive Mentor UI
+
+- Dark by default for every page (Bootstrap `data-bs-theme`), set in `index.html` before the page
+  draws; a sun/moon toggle in the navbar switches to light and is remembered (localStorage).
+- New packages: `bootstrap-icons`, `react-markdown` + `remark-gfm` (replies render as Markdown;
+  raw HTML is ignored). The Mentor page is lazy-loaded, so other pages don't download them.
+- `components/BotAvatar.jsx`: SVG robot that blinks, floats, has a glowing antenna and twinkling
+  sparkles, and jitters with darting eyes while a reply is being written.
+- Mentor page split into `components/mentor/` (`MentorHome`, `ChatSidebar`, `ChatMessage`).
+  It opens on a landing screen (rotating tagline, Start a new chat, Continue last chat, 4
+  suggestion cards); typing dots, streaming cursor, message slide-in, copy button, auto-growing
+  input. All animations are off when the OS asks for reduced motion.
+- Frosted navbar with icons; gradient Add/Save buttons on the CRUD pages.
+
+**Verified:** build OK. Browser (Playwright, Chrome): 20 checks passed (landing first, New chat opens
+the chat, suggestion card sends its prompt, bot jitters while thinking, Markdown rendered with no raw
+`**`, copy button, theme toggle remembered, no horizontal scroll on a 390px phone); screenshots
+reviewed in dark, light, desktop and phone.
+
+---
+
+## 14. Dashboard
+
+- `GET /api/dashboard` (`routers/dashboard.py` → `services/dashboard_service.py` →
+  `repositories/dashboard_repository.py`): counts per page (skills, learning/career goals with
+  active counts, projects with in-progress count) and up to 20 learning goals with their latest
+  progress (completed = 100%, abandoned hidden), active first, nearest target date first.
+- `GET /api/ai/tip`: one short personal tip from Gemini based on the profile (same errors as chat).
+- `pages/Dashboard.jsx`: greeting with the bot, 4 clickable stat cards with count-up numbers,
+  animated gradient progress bars with "in N days" / overdue hints, and a tip card. The tip is
+  cached in the browser for the day (1 Gemini call per day); **New tip** asks for another.
+
+**Verified:** 90 passed (counts, other users excluded, latest progress, ordering, tip + errors).
+Live: real tip mentioned the user's Python + MCP skills. Browser: stat counts, empty state, tip
+cached (1 request per day, StrictMode double request fixed), bars at the right width, links, phone
+layout, light theme.
+
+---
+
+## 15. Goals, Career, Projects redesign and file uploads
+
+**Database** (migration `a0783d0b3de9`, additive): new `uploads` table (random 32-hex id, owner,
+original name, type, size); `projects.content` (write-up HTML); `career_goals.required_skills`.
+
+**Uploads** (`/api/uploads`, `services/upload_service.py`): files saved to `UPLOAD_DIR`
+(`backend/uploads`, git-ignored), max `MAX_UPLOAD_MB` (20). The type comes from the file's first
+bytes, not its name: PNG, JPEG, WebP, GIF, PDF, or UTF-8 text/code by extension. SVG, Office files,
+video etc. are rejected. Text is always served as `text/plain` + `nosniff`, so uploaded HTML can't run.
+Users only see their own files.
+
+**Chat attachments**: up to 5 files per message (`attachments` ids on the message and on history
+items; a message may be files only). `app/ai/attachments.py` loads them newest first within an 18 MB
+inline budget; images/PDFs go to Gemini as bytes, text files as text; files left out or deleted are
+replaced by a note. Frontend `Composer.jsx`: paperclip, drag & drop over the chat, paste, upload
+progress, remove; messages show image thumbnails and file chips.
+
+**Goals**: cards with a progress ring; "Update progress" dialog (slider, +/- steps, note, history,
+"mark completed" at 100%, confetti). The API now returns `progress_percent` / `last_progress_at`
+(completed = 100%).
+
+**Career**: only role, needed skills and notes. Cards show readiness (needed skills you already have
+on the Skills page), chips to add/remove needed skills in place (saved instantly), "I have this" adds
+a skill to Skills, re-syncs when the tab regains focus, "Ask Mentora for a roadmap" opens the chat with
+a prepared question.
+
+**Projects**: cards with the write-up's first image as cover; `/projects/:id` with a TipTap rich editor
+(headings, bold/italic/underline/strike, lists, quote, code, links, images by button/paste/drop, undo,
+Ctrl+S). Images are stored as `/api/uploads/<id>`. The mentor's profile includes a text preview of the
+write-up and each role's needed skills.
+
+**Verified:** 123 backend tests. Live Gemini (before the free quota ran out): read a screenshot and
+found a bug in an attached .py file. Browser: 28/28 checks for Goals/Career/Projects, using `[test]`
+data that was deleted afterwards, plus chat attachments UI. Found and fixed: toolbar clicks stole the
+editor's focus (lost keystrokes and bold).
+
+---
+
+## 16. Reliability and chat editing
+
+- **Gemini retries:** brief 500/502/503/504 errors (e.g. "model overloaded") and dropped connections
+  are retried by the SDK, up to 3 attempts (~1 s, ~2 s). 429 is not retried; the message now says
+  whether it's the daily free limit or the per-minute one, and when it resets. `GEMINI_MODEL` was set
+  to `gemini-3.5-flash-lite` in `backend/.env` after the free daily limit (20/day per model) ran out.
+- **Edit a sent message:** "Edit" under your message; the replies after it are replaced and the
+  mentor answers the edited text (history = only the messages before it). Marked "(edited)".
+- **Rename a chat:** pencil next to each chat in the sidebar (or double-click the name).
+- **Phone menu:** the hamburger menu is React-controlled and closes on link tap, outside tap,
+  Escape and page change. Bigger navbar logo.
+
+**Verified:** 130 backend tests (3 run the real SDK against a fake server: 503 → retry → OK, gives up
+after 3, 429 not retried). Browser: 14/14 edit + rename checks, 11/11 phone menu checks.
+
+---
+
 ## Next steps (not started)
 
-1. Connect a real LLM (e.g. Claude) in `backend/app/ai/llm_client.py`.
-2. Send the conversation history so the mentor remembers earlier messages.
-3. Give the mentor the user's skills, goals and projects for personalized advice.
-4. Dashboard content (summary of goals, progress, skills).
-5. UI for user skills and learning progress (the backend APIs already exist).
-6. pytest tests for user skills, learning progress, career goals and projects.
-7. Authentication (later, by replacing `get_current_user_id()`).
+1. Save chats in the database, so they work across browsers and devices.
+2. UI for skill levels (`user_skills`; the backend API already exists).
+3. pytest tests for career goals and projects CRUD; automated frontend tests.
+4. Authentication (later, by replacing `get_current_user_id()`).

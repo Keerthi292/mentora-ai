@@ -1,7 +1,7 @@
 """Database access for learning goals. No HTTP or business rules here, only queries."""
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import LearningGoal
 
@@ -9,7 +9,12 @@ from app.models import LearningGoal
 def list_goals(
     db: Session, user_id: int, status: str | None = None, skip: int = 0, limit: int = 100
 ) -> list[LearningGoal]:
-    stmt = select(LearningGoal).where(LearningGoal.user_id == user_id)
+    # Load progress updates in one extra query (the response includes the latest one)
+    stmt = (
+        select(LearningGoal)
+        .where(LearningGoal.user_id == user_id)
+        .options(selectinload(LearningGoal.progress_entries))
+    )
     if status is not None:
         stmt = stmt.where(LearningGoal.status == status)
     stmt = stmt.order_by(LearningGoal.created_at.desc()).offset(skip).limit(limit)

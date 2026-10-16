@@ -7,19 +7,21 @@ import { readSseStream } from "./sse";
  * Send a message and receive the reply piece by piece.
  *
  *   await streamMentorReply("How do I learn React?", {
+ *     attachments,              // ids of files uploaded for this message (services/uploads.js)
+ *     history,                  // earlier messages: [{ role, content, attachments }]
  *     onToken: (text) => ...,   // called for every new piece of the reply
  *     signal,                   // optional AbortController.signal to cancel
  *   });
  *
  * Resolves when the reply is complete ([DONE]); throws an Error otherwise.
  */
-export async function streamMentorReply(message, { onToken, signal } = {}) {
+export async function streamMentorReply(message, { attachments = [], history = [], onToken, signal } = {}) {
   let response;
   try {
     response = await fetch(`${API_BASE_URL}/api/ai/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, attachments, history }),
       signal,
     });
   } catch (err) {

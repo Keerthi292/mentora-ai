@@ -1,13 +1,22 @@
-fastapi
-uvicorn[standard]
-pydantic
-pydantic-settings
-sqlalchemy
-alembic
-psycopg2-binary
-python-dotenv
-mcp[cli]<2
+
+# Web framework and server
+fastapi==0.143.2
+uvicorn[standard]==0.54.0    # [standard] adds auto-reload and faster event loop
+
+# Settings and validation
+pydantic==2.14.1
+pydantic-settings==2.16.0    # reads backend/.env
+
+# Database
+sqlalchemy==2.1.4
+alembic==1.20.0    # migrations
+psycopg2-binary==2.9.13    # PostgreSQL driver
+python-multipart==0.0.32    # file uploads
+
+# AI
+google-genai==2.31.0    # Gemini (official Google Gen AI SDK)
+httpx==0.28.1    # network error handling for Gemini, and the test client
+mcp==1.30.0    # MCP server at /mcp
 
 # Testing
-pytest
-httpx
+pytest==9.1.1

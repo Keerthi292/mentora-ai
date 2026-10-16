@@ -89,6 +89,22 @@ class LearningGoal(Base):
         order_by="LearningProgress.created_at",
     )
 
+    # The latest progress update (progress_entries is ordered oldest first).
+    # Completed goals count as 100% even without a final update.
+    @property
+    def latest_progress(self) -> "LearningProgress | None":
+        return self.progress_entries[-1] if self.progress_entries else None
+
+    @property
+    def progress_percent(self) -> int:
+        if self.status == "completed":
+            return 100
+        return self.latest_progress.progress_percent if self.latest_progress else 0
+
+    @property
+    def last_progress_at(self) -> datetime | None:
+        return self.latest_progress.created_at if self.latest_progress else None
+
 
 # ---------------------------------------------------------------------------
 # Tracking tables
@@ -153,6 +169,8 @@ class CareerGoal(Base):
     )
     target_role: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text)
+    # Comma-separated list, e.g. "Python, SQL, Docker"
+    required_skills: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="active")
     target_date: Mapped[date | None] = mapped_column(Date)
 
@@ -171,5 +189,34 @@ class Project(Base):
     # Comma-separated list, e.g. "React, FastAPI, PostgreSQL"
     technologies: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="planned")
+    # The write-up from the rich editor (HTML; images point to /api/uploads/<id>)
+    content: Mapped[str | None] = mapped_column(Text)
 
     user: Mapped["User"] = relationship(back_populates="projects")
+
+
+# ---------------------------------------------------------------------------
+# Uploaded files (chat attachments and project images)
+# ---------------------------------------------------------------------------
+
+
+class Upload(Base):
+    """A file a user uploaded. The bytes live on disk (settings.UPLOAD_DIR)."""
+
+    __tablename__ = "uploads"
+
+    # Random id, so file URLs can't be guessed by counting
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    filename: Mapped[str] = mapped_column(String(255))  # the original name, for display
+    content_type: Mapped[str] = mapped_column(String(100))
+    size: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    @property
+    def url(self) -> str:
+        return f"/api/uploads/{self.id}"

@@ -130,7 +130,8 @@ def test_update_goal_only_changes_sent_fields(client):
     response = client.patch(f"{URL}/{goal['id']}", json={"status": "completed"})
 
     assert response.status_code == 200
-    assert response.json() == {**goal, "status": "completed"}
+    # A completed goal counts as 100% done
+    assert response.json() == {**goal, "status": "completed", "progress_percent": 100}
 
 
 def test_update_goal_can_clear_optional_field(client):

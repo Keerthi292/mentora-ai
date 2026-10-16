@@ -1,0 +1,33 @@
+[project]
+name = "mentora-ai-backend"
+version = "0.1.0"
+description = "Mentora AI backend (FastAPI)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic",
+    "pydantic-settings",
+    "sqlalchemy",
+    "alembic",
+    "psycopg2-binary",
+    "httpx",
+    "python-multipart",  # file uploads (FastAPI UploadFile)
+    "mcp<2",
+    # Gemini (official Google Gen AI SDK); written against the 2.x API
+    "google-genai>=2,<3",
+]
+
+# Installed by `uv run` / `uv sync` by default, skipped with --no-dev
+[dependency-groups]
+dev = ["pytest"]
+
+# An app, not a library: uv installs the dependencies only
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+# Run from backend/:  uv run pytest
+testpaths = ["tests"]
+# Lets tests do `from app...` without installing the project
+pythonpath = ["."]

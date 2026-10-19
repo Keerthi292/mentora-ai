@@ -7,14 +7,12 @@ import react from "@vitejs/plugin-react";
 const BACKEND_DIR = fileURLToPath(new URL("../backend", import.meta.url));
 
 // https://vite.dev/config/
-export default defineConfig(({ command, mode }) => {
+export default defineConfig(({ mode }) => {
   // The backend's address, from API_HOST and API_PORT in backend/.env. Read here in the config
   // only: nothing from backend/.env is sent to the browser. Only the dev server (npm run dev)
-  // needs it; a production build is served next to the backend.
-  const { API_HOST, API_PORT } = loadEnv(mode, BACKEND_DIR, "");
-  if (command === "serve" && !(API_HOST && API_PORT)) {
-    throw new Error("API_HOST and API_PORT are missing: add them to backend/.env (see backend/.env.example).");
-  }
+  // uses it.
+  // Same defaults as backend/app/config.py
+  const { API_HOST = "127.0.0.1", API_PORT = "8002" } = loadEnv(mode, BACKEND_DIR, "");
   // 0.0.0.0 means "listen everywhere"; connect to it on this machine
   const host = API_HOST === "0.0.0.0" ? "127.0.0.1" : API_HOST;
 

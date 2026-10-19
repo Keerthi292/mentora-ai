@@ -519,6 +519,8 @@ httpOnly and invisible to JavaScript.
 `frontend/.env` and `frontend/.env.example` are gone; `backend/.env` is the project's only `.env`.
 The Vite dev server reads `API_HOST` and `API_PORT` from it for the `/api` proxy (in the config
 only, never sent to the browser). The stale `DEMO_USER_ID` was removed from `backend/.env.example`.
+`API_HOST`, `API_PORT` (default 127.0.0.1:8002) and `CORS_ORIGINS` (default none) are now
+optional, so the backend starts on Render, which runs uvicorn with its own `--host`/`--port`.
 
 ---
 

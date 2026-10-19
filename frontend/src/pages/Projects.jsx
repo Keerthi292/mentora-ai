@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import EmptyState from "../components/EmptyState";
 import FilterPills from "../components/FilterPills";
 import FormModal from "../components/FormModal";
+import PageAssistant from "../components/PageAssistant";
 import ResumeImportModal from "../components/ResumeImportModal";
 import StatusBadge, { statusOptions } from "../components/StatusBadge";
 import useResource from "../hooks/useResource";
@@ -140,6 +141,8 @@ function Projects() {
       )}
 
       {importing && <ResumeImportModal onClose={() => setImporting(false)} onImported={reload} />}
+
+      <PageAssistant page="projects" onChanged={reload} />
     </>
   );
 }

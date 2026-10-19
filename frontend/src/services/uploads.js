@@ -21,7 +21,7 @@ export const ACCEPTED_DOCUMENTS = ACCEPTED_FILES.split(",")
   .filter((type) => !type.startsWith("image/"))
   .join(",");
 
-/** Full URL of an uploaded file: "/api/uploads/<id>" -> "http://127.0.0.1:8002/api/uploads/<id>" */
+/** Full URL of an uploaded file: "/api/uploads/<id>" -> "<VITE_API_BASE_URL>/api/uploads/<id>" */
 export function fileUrl(path) {
   return path?.startsWith("/api/") ? `${API_BASE_URL}${path}` : path;
 }

@@ -340,7 +340,7 @@ function MentorChat() {
             Chats
           </button>
           {view === "chat" && (
-            <h2 className="h5 mb-0 text-truncate flex-grow-1">{active ? active.title : "New chat"}</h2>
+            <h2 className="h6 fw-semibold mb-0 text-truncate flex-grow-1">{active ? active.title : "New chat"}</h2>
           )}
           {view === "chat" && (
             <button

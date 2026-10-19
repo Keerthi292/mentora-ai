@@ -1,13 +1,14 @@
 """Talks to the Gemini API (official Google Gen AI SDK, package `google-genai`).
 
-The rest of the app only sees `generate_response`, `stream_response` and
-`generate_json` (structured answers, e.g. a parsed resume), plus `LLMError`.
+The rest of the app only sees `generate_response`, `stream_response`,
+`generate_json` (structured answers, e.g. a parsed resume) and
+`generate_with_tools` (the page assistant), plus `LLMError`.
 Every failure is raised as an LLMError with a message that is safe to show to
 the user; nothing here returns a fake reply.
 """
 
 import logging
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import aclosing
 from functools import lru_cache
 from typing import TypeVar
@@ -257,6 +258,50 @@ def generate_json(system_prompt: str, parts: Sequence[types.Part], schema: type[
     except ValidationError as exc:
         logger.warning("Gemini returned JSON that doesn't match %s: %s", schema.__name__, exc)
         raise LLMError("The AI service returned an unexpected answer. Please try again.") from exc
+
+
+# Most requests need 1-2 tool calls; stop a model that keeps calling tools
+MAX_TOOL_ROUNDS = 6
+
+
+def generate_with_tools(
+    system_prompt: str,
+    user_message: str,
+    history: Sequence[ChatMessage],
+    tools: Sequence[types.FunctionDeclaration],
+    call_tool: Callable[[str, dict], dict],
+) -> str:
+    """Let Gemini call `tools` (run by `call_tool(name, args)`) until it answers with text."""
+    client = _get_client()
+    contents = _contents(user_message, history)
+    config = types.GenerateContentConfig(
+        system_instruction=system_prompt,
+        tools=[types.Tool(function_declarations=list(tools))],
+    )
+    for _ in range(MAX_TOOL_ROUNDS):
+        try:
+            response = client.models.generate_content(model=settings.GEMINI_MODEL, contents=contents, config=config)
+        except Exception as exc:
+            raise _to_llm_error(exc) from exc
+
+        calls = response.function_calls
+        if not calls:
+            if not response.text:
+                raise LLMError(_blocked_message(response))
+            return response.text
+        # Send the model's turn back unchanged (it carries Gemini's thought signatures),
+        # then the result of each call
+        contents.append(response.candidates[0].content)
+        contents.append(
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_function_response(name=call.name, response=call_tool(call.name, dict(call.args or {})))
+                    for call in calls
+                ],
+            )
+        )
+    raise LLMError("That took too many steps. Please ask for one change at a time.")
 
 
 async def stream_response(

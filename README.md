@@ -5,10 +5,6 @@ AI-powered Personal Learning and Career Intelligence Companion.
 Mentora AI helps you track the skills you're learning, your learning goals and
 progress, your career goals and your projects, and gives you an AI mentor to chat with.
 
-> **Status:** early development. The app runs end to end with a **single demo user**
-> (no login yet) and an AI mentor powered by **Google Gemini**.
-> See [PROGRESS.md](PROGRESS.md) for everything done so far.
-
 ---
 
 ## Tech stack
@@ -48,6 +44,7 @@ mentora-ai/
 │       ├── schemas.py          # Pydantic Create / Update / Response schemas
 │       ├── dependencies.py     # get_current_user_id() -> demo user
 │       ├── seed.py             # Creates the demo user
+│       ├── startup_report.py   # The ✓ / ✗ lines printed when the backend starts
 │       ├── mcp_server.py       # MCP server (tools: ask_mentor, ping)
 │       ├── ai/                 # Mentor: Gemini client, prompts, user profile, attachments, resume reading
 │       ├── routers/            # HTTP endpoints
@@ -55,6 +52,7 @@ mentora-ai/
 │       └── repositories/       # Database queries
 └── frontend/
     ├── .env                    # VITE_API_BASE_URL (not committed)
+    ├── .env.example            # Template for .env
     ├── package.json
     ├── vite.config.js
     └── src/
@@ -64,7 +62,7 @@ mentora-ai/
         ├── pages/              # Dashboard, Skills, LearningGoals, CareerGoals, Projects,
         │                       # ProjectDetail, MentorChat
         ├── components/         # BotAvatar, ProgressRing, RichEditor, FormModal, Modal,
-        │                       # ResumeImportModal, ...
+        │                       # ResumeImportModal, PageAssistant (floating bot), ...
         │   └── mentor/         # Chat: MentorHome, ChatSidebar, ChatMessage, Composer
         ├── hooks/              # useResource (load / create / update / delete), useMe (name, theme)
         ├── services/           # api.js, mentorChat.js, sse.js, uploads.js, chats.js
@@ -168,7 +166,7 @@ First time only:
 
 ```bash
 docker run -d --name mentora-postgres \
-  -e POSTGRES_USER=mentora -e POSTGRES_PASSWORD=mentora_dev -e POSTGRES_DB=mentora \
+  -e POSTGRES_USER=mentora -e POSTGRES_PASSWORD=YOUR_DB_PASSWORD -e POSTGRES_DB=mentora \
   -p 5432:5432 -v mentora_pgdata:/var/lib/postgresql/data \
   --restart unless-stopped postgres:16
 ```
@@ -201,10 +199,16 @@ python3 -m venv .venv
 ```
 
 Create `backend/.env` (copy `backend/.env.example`; if you already have a `.env`,
-just add the lines you're missing):
+just add the lines you're missing). **Private addresses, passwords and keys live only in the
+`.env` files** (git-ignored), never in the code:
 
 ```env
-DATABASE_URL=postgresql+psycopg2://mentora:mentora_dev@localhost:5432/mentora
+# Required: the same password as POSTGRES_PASSWORD above
+DATABASE_URL=postgresql+psycopg2://mentora:YOUR_DB_PASSWORD@localhost:5432/mentora
+# Required: where the backend runs, and which frontend addresses may call it (CORS)
+API_HOST=127.0.0.1
+API_PORT=8002
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 # Optional, defaults to 1
 DEMO_USER_ID=1
 
@@ -225,10 +229,27 @@ Create the tables and start the server:
 ```bash
 cd backend
 uv run alembic upgrade head
-uv run main.py          # http://127.0.0.1:8002, restarts when app/ changes
+uv run main.py          # http://API_HOST:API_PORT, restarts when app/ changes
 ```
 
-On startup the demo user (`Demo User`, `demo@mentora.local`) is created automatically.
+On startup the demo user (`Demo User`, `demo@mentora.local`) is created automatically, and the
+terminal shows one ✓ / ✗ line per part, so you can see what works:
+
+```text
+INFO:     ── Mentora AI ──────────────────────────────────────────────
+INFO:     ✓ Database    connected to mentora on localhost:5432
+INFO:     ✓ Migrations  up to date (909b0d3d06d8)
+INFO:     ✓ User        "Keerthi" (id 1)
+INFO:     ✓ Data        34 skills, 0 learning goals, 6 projects, 4 chats
+INFO:     ✓ Gemini      key set, model gemini-3.5-flash-lite (not called now, to save quota)
+INFO:     ✓ Uploads     .../backend/uploads (2 files, max 20 MB each)
+INFO:     ✓ MCP         /mcp, tools: ask_mentor, ping
+INFO:     ── All systems ready · API docs at /docs ──────────────────────
+```
+
+A ✗ line says what's wrong and how to fix it (e.g. `docker start mentora-postgres`). Each MCP
+tool call also prints a line: `MCP ▶ ask_mentor called`, then `MCP ✓ ask_mentor done in 1.2s`
+(or `MCP ✗ ... failed`).
 Change the name with the ✏️ next to the Dashboard greeting (or `PATCH /api/me`); the app
 and the mentor then greet you by it.
 
@@ -242,9 +263,11 @@ cd frontend
 npm install
 ```
 
-Create `frontend/.env`:
+Create `frontend/.env` (copy `frontend/.env.example`). Only public values go here: anything
+`VITE_*` ends up in the browser.
 
 ```env
+# Required: the backend's address (API_HOST:API_PORT from backend/.env)
 VITE_API_BASE_URL=http://127.0.0.1:8002
 ```
 
@@ -263,11 +286,15 @@ Open http://localhost:5173 (the backend's CORS only allows port 5173).
 | Page | URL | What it does |
 |---|---|---|
 | Dashboard | `/` | Greeting by name, counts per page, learning-goal progress bars, AI tip of the day |
-| Skills | `/skills` | Table: add, edit, delete skills; **Import from resume** |
+| Skills | `/skills` | Table with your **level** and **status** per skill (change in place), filters, add/edit/delete; **Import from resume** |
 | Learning Goals | `/goals` | Cards with a progress ring; **Update progress** (slider, note, history, mark completed) |
 | Career Goals | `/career` | Target roles with needed skills; readiness ring; add/remove skills in place; ask for a roadmap |
 | Projects | `/projects` | Cards (cover image from the write-up); **Import from resume**; `/projects/:id` has a rich-text write-up with images |
 | AI Mentor | `/mentor` | ChatGPT-style chat: streaming replies, chat list, rename, edit messages, file uploads |
+
+The Skills, Goals, Career and Projects pages have a **floating Mentora bot** (bottom right): ask it in
+plain words ("set Docker to advanced", "I'm 60% done with my RAG goal") and it changes that page's
+data, then the page refreshes. It asks before deleting anything.
 
 The whole app is dark by default (sun/moon button in the navbar for light), and works on phones.
 
@@ -285,6 +312,7 @@ Another user's data always returns **404**.
 | Career goals | `GET/POST /api/career-goals`, `GET/PATCH/DELETE /api/career-goals/{id}` |
 | Projects | `GET/POST /api/projects`, `GET/PATCH/DELETE /api/projects/{id}` |
 | Current user | `GET/PATCH /api/me` (name, theme) |
+| Page assistant | `POST /api/ai/assistant` (`{page, message, history}` → `{reply, actions, changed}`; Gemini calls tools that change the page's data) |
 | AI chat | `POST /api/ai/chat`, `POST /api/ai/chat/stream` (Server-Sent Events), `GET /api/ai/tip` (saved for the day; `?refresh=true` for a new one) |
 | Mentor chats | `GET /api/conversations`, `GET/PUT/PATCH/DELETE /api/conversations/{id}` (`PUT` saves the whole chat) |
 | Resume import | `POST /api/resume/parse` (`{upload_id}` → skills and projects found; saves nothing), `POST /api/resume/import` (saves the ones you picked) |
@@ -338,6 +366,9 @@ Replies come from **Google Gemini** (`google-genai` SDK, `backend/app/ai/llm_cli
   `CHAT_HISTORY_LIMIT` = 20 messages sent), edit a sent message, rename chats. Saved in the database.
 - **Files:** attach up to 5 images, PDFs or code/text files per message (`MAX_UPLOAD_MB` each).
   The type is checked from the content; SVG, Word and video are rejected.
+- **Page assistant:** on Skills, Goals, Career and Projects, Gemini gets *tools* for that page only
+  (`ai/assistant.py`, e.g. `set_skill`, `log_progress`, `update_project`). Each tool goes through the
+  normal services, so the same checks apply; deletes need your confirmation first.
 - **Greets you by name**, and **Import from resume** (Skills / Projects pages) finds your skills
   and projects in a PDF, image or text resume; you pick what to save.
 
@@ -372,8 +403,8 @@ docker start mentora-postgres   # if it's not running
 uv run pytest                   # add -v for each test name
 ```
 
-Current result: **178 passed** (AI chat, attachments, retries, dashboard, uploads, skills,
-learning goals, demo user, current user, mentor chats, resume import).
+Current result: **197 passed** (AI chat, attachments, retries, dashboard, uploads, skills,
+learning goals, demo user, current user, mentor chats, resume import, page assistant, startup report).
 Gemini is replaced by a fake in tests, so they need no API key and use no quota.
 
 ---
@@ -394,5 +425,4 @@ Gemini is replaced by a fake in tests, so they need no API key and use no quota.
 ## Not built yet
 
 - Authentication (the app uses one demo user on purpose for now)
-- UI for skill levels (`user_skills`: proficiency per skill; the API exists)
 - Automated frontend tests; dedicated backend tests for career goals and projects CRUD

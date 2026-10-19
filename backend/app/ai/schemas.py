@@ -55,3 +55,20 @@ class ChatResponse(BaseModel):
 
 class TipResponse(BaseModel):
     tip: str
+
+
+# --- Page assistant (the small chat on the Skills, Goals, Career and Projects pages) ---
+
+
+class AssistantRequest(BaseModel):
+    page: Literal["skills", "goals", "career", "projects"]
+    message: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+    # Earlier messages of this little chat, oldest first
+    history: list[ChatMessage] = Field(default_factory=list, max_length=40)
+
+
+class AssistantResponse(BaseModel):
+    reply: str
+    # What was changed, e.g. "Updated Docker (DevOps, advanced, learning)"
+    actions: list[str]
+    changed: bool  # True if the page should reload its data

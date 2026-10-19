@@ -16,7 +16,7 @@ For setup and run instructions, see [README.md](README.md).
 | Database (PostgreSQL, 10 tables, 3 Alembic migrations) | ✅ Done |
 | CRUD APIs for all 6 resources | ✅ Done |
 | Single demo user (no authentication) | ✅ Done |
-| Backend tests (pytest) | ✅ Done (178 tests passing) |
+| Backend tests (pytest) | ✅ Done (197 tests passing) |
 | Frontend setup (React + Vite + Bootstrap) | ✅ Done |
 | Frontend pages: Skills, Goals, Career, Projects | ✅ Done |
 | AI Mentor chat page (streaming) | ✅ Done |
@@ -30,6 +30,8 @@ For setup and run instructions, see [README.md](README.md).
 | Import skills and projects from a resume | ✅ Done |
 | Greets the user by name (Keerthi) | ✅ Done |
 | Chats, theme and daily tip saved in the database (no localStorage) | ✅ Done |
+| Skill levels on the Skills page | ✅ Done |
+| Page assistant (floating bot that edits Skills / Goals / Career / Projects) | ✅ Done |
 | Authentication | ⏳ Not started (on purpose) |
 
 ---
@@ -408,8 +410,82 @@ theme into the database; save/load/delete of a test chat; tip saved for the day.
 
 ---
 
+## 20. Skill levels on the Skills page
+
+- The Skills table now has **Your level** (beginner → expert) and **Status** (want to learn, learning,
+  acquired) dropdowns per skill, saved right away through `/api/user-skills`. "Set level..." removes
+  the level; status is disabled until a level is set.
+- The add/edit form also sets the level and status. Filter pills: All, Want to learn, Learning,
+  Acquired, Not set.
+- `components/CrudPage.jsx` was removed: the Skills page was its only user and now has its own table.
+
+**Verified:** Playwright, 15/15 checks (add with level, change level and status in place, filters,
+remove level, edit, delete, no console errors) using a `[test]` skill that was deleted afterwards.
+
+---
+
+## 21. Page assistant (floating bot that changes page data)
+
+- **Backend:** `POST /api/ai/assistant` `{page, message, history}`. `app/ai/assistant.py` gives Gemini
+  the tools for that page only (Skills: `set_skill`, `rename_skill`, `clear_skill_level`,
+  `delete_skill`; Goals: `add_goal`, `update_goal`, `log_progress`, `delete_goal`; Career and Projects:
+  add / update / delete) plus the page's current items. `llm_client.generate_with_tools` runs the loop
+  (max 6 rounds), sending Gemini's turn back unchanged so its thought signatures are kept.
+- Tools use the normal services and schemas: bad values, unknown names/ids, other users' data and
+  duplicates come back to Gemini as `{"error": ...}`, and nothing half-done is saved. Deletes only
+  after the user confirms. If Gemini fails after a change, the reply still lists what was done.
+- **Frontend:** `components/PageAssistant.jsx`, a bot button (bottom right) on the 4 pages that opens a
+  small chat with example requests; the changes are listed with ✓ and the page reloads its data.
+  The little chat isn't saved (fresh on each visit).
+
+**Verified:** 15 new tests (fake Gemini scripting tool calls). Live with Gemini: add → change level →
+asks to confirm → delete. Playwright 9/9: bot on all 4 pages, a change shows in the table without a
+reload, fits a phone screen, no console errors (test data deleted).
+
+---
+
+## 22. Smaller text on the Mentor page
+
+- Messages, chat list and message box: 16px → **15px** (`.chat-page` in `index.css`); chat title
+  20px → 16px; the landing heading, subtitle and buttons use normal sizes instead of display / large.
+
+**Verified:** sizes measured in the browser (Playwright); screenshots of the landing and an open chat.
+
+---
+
+## 23. Health check and startup report
+
+- **Full check (2026-10-19):** backend, database on the latest migration, all list endpoints 200,
+  MCP `tools/list` (ask_mentor, ping), `ping`, `ask_mentor` with real Gemini, frontend: all working.
+- **Startup report** (`app/startup_report.py`): when the backend starts it prints one ✓ / ✗ line for
+  the database, migrations (current vs. latest), user, data counts, Gemini key and model (not called,
+  to save quota), uploads folder (writable) and MCP tools. A ✗ says how to fix it; if the database is
+  down the checks that need it are skipped. The demo-user seed error is now one line, not a traceback.
+- **MCP tool lines:** each call prints `MCP ▶ <tool> called` and `MCP ✓ <tool> done in 1.2s` (or ✗ failed).
+- FastMCP turned on INFO logging for every library (alembic plugins, raw Gemini HTTP lines);
+  `log_level="WARNING"` hides that noise so the report stands out.
+
+**Verified:** 4 new tests; a second copy on port 8099 showed the report and MCP lines, and with the
+database down and no Gemini key it showed the ✗ lines with hints (copies stopped afterwards).
+
+---
+
+## 24. Private settings only in `.env`
+
+- Removed from the code: the database URL with its password (`config.py` default), the CORS origins
+  (`main.py`), the backend host/port (`backend/main.py`) and the frontend's fallback backend URL
+  (`api.js`). They are now required settings: `DATABASE_URL`, `API_HOST`, `API_PORT`, `CORS_ORIGINS`
+  in `backend/.env`, and `VITE_API_BASE_URL` in `frontend/.env`.
+- `backend/.env.example` and the new `frontend/.env.example` use a placeholder `YOUR_DB_PASSWORD`; the
+  README no longer shows the real database password.
+- Checked: both `.env` files are git-ignored and were never committed; no Gemini key in the git history.
+
+**Verified:** 197 tests; the live backend reloaded with the new settings; CORS allows
+`http://localhost:5173` and rejects other sites; the frontend loads data with no console errors.
+
+---
+
 ## Next steps (not started)
 
-1. UI for skill levels (`user_skills`; the backend API already exists).
-2. pytest tests for career goals and projects CRUD; automated frontend tests.
-3. Authentication (later, by replacing `get_current_user_id()`).
+1. pytest tests for career goals and projects CRUD; automated frontend tests.
+2. Authentication (later, by replacing `get_current_user_id()`).

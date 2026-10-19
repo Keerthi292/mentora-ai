@@ -21,7 +21,7 @@ def test_empty_dashboard(client):
 
 
 def test_counts(client, db, demo_user, make_user):
-    db.add_all([Skill(name="Python"), Skill(name="SQL")])
+    db.add_all([Skill(user_id=1, name="Python"), Skill(user_id=1, name="SQL")])
     db.add_all(
         [
             LearningGoal(user_id=demo_user.id, title="A", status="active"),

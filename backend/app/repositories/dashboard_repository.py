@@ -6,9 +6,8 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import LearningGoal, Skill
 
 
-def count_skills(db: Session) -> int:
-    # Skills are a shared catalog (no owner), the same list the Skills page shows
-    return db.scalar(select(func.count()).select_from(Skill))
+def count_skills(db: Session, user_id: int) -> int:
+    return db.scalar(select(func.count()).select_from(Skill).where(Skill.user_id == user_id))
 
 
 def count_by_status(db: Session, model, user_id: int) -> dict[str, int]:

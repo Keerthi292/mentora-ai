@@ -1,53 +1,82 @@
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
-import { api } from "../services/api";
+import { api, setUnauthorizedHandler } from "../services/api";
 
-// One request shared by every component that uses the user (greetings, theme)
-let mePromise = null;
+// Who is logged in, shared by the whole app (one /api/me request).
+// status: "loading" | "in" (logged in) | "out" (show the login page) | "offline" (backend down)
+let state = { status: "loading", me: null, error: "" };
 const listeners = new Set();
+let loading = null;
 
-function loadMe() {
-  mePromise ??= api.get("/api/me").catch((err) => {
-    mePromise = null; // try again next time
-    throw err;
-  });
-  return mePromise;
+function setState(changes) {
+  state = { ...state, ...changes };
+  listeners.forEach((listener) => listener());
 }
 
-/** First name to greet the user with, or "" if unknown / still the placeholder. */
+function subscribe(listener) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+// Any request answered with 401 (e.g. the session expired) shows the login page
+setUnauthorizedHandler(() => setState({ status: "out", me: null }));
+
+function loadMe() {
+  loading ??= api
+    .get("/api/me")
+    .then(
+      (me) => setState({ status: "in", me, error: "" }),
+      (err) => setState(err.status === 401 ? { status: "out", me: null } : { status: "offline", error: err.message })
+    )
+    .finally(() => {
+      loading = null;
+    });
+  return loading;
+}
+
+const login = async (email, password) => {
+  const me = await api.post("/api/auth/login", { email, password });
+  setState({ status: "in", me });
+};
+
+const register = async (data) => {
+  const me = await api.post("/api/auth/register", data);
+  setState({ status: "in", me });
+};
+
+const logout = async () => {
+  await api.post("/api/auth/logout").catch(() => {}); // logged out here either way
+  setState({ status: "out", me: null });
+};
+
+const update = async (changes) => {
+  const me = await api.patch("/api/me", changes);
+  setState({ me });
+};
+
+const retry = () => {
+  setState({ status: "loading" });
+  return loadMe();
+};
+
+/** First name to greet the user with, or "" if unknown. */
 function firstName(me) {
-  const name = me?.full_name?.trim() || "";
-  if (!name || name === "Demo User") return "";
-  return name.split(/\s+/)[0];
+  return me?.full_name?.trim().split(/\s+/)[0] ?? "";
 }
 
 /**
- * The current user ({ id, full_name, email, theme }), or null while loading or
- * if the backend can't be reached. `update({ full_name?, theme? })` saves the
- * changes and updates every component that uses this hook.
+ * The logged-in user ({ id, full_name, email, theme }) and the login actions:
+ * login(email, password), register({ full_name, email, password }), logout(),
+ * update({ full_name?, theme? }), retry() (after "offline").
  */
 function useMe() {
-  const [me, setMe] = useState(null);
+  const current = useSyncExternalStore(subscribe, () => state);
 
   useEffect(() => {
-    let active = true;
-    loadMe()
-      .then((data) => active && setMe(data))
-      .catch(() => {}); // greetings just leave the name out
-    listeners.add(setMe);
-    return () => {
-      active = false;
-      listeners.delete(setMe);
-    };
+    if (state.status === "loading") loadMe();
   }, []);
 
-  const update = async (changes) => {
-    const updated = await api.patch("/api/me", changes);
-    mePromise = Promise.resolve(updated);
-    listeners.forEach((set) => set(updated));
-  };
-
-  return { me, name: firstName(me), update };
+  return { ...current, name: firstName(current.me), login, register, logout, update, retry };
 }
 
 export default useMe;

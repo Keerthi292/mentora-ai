@@ -23,7 +23,7 @@ def get_dashboard(db: Session, user_id: int) -> DashboardResponse:
     project_statuses = dashboard_repository.count_by_status(db, Project, user_id)
 
     counts = DashboardCounts(
-        skills=dashboard_repository.count_skills(db),
+        skills=dashboard_repository.count_skills(db, user_id),
         learning_goals=sum(goal_statuses.values()),
         active_learning_goals=goal_statuses.get("active", 0),
         career_goals=sum(career_statuses.values()),

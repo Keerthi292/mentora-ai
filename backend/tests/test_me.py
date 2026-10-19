@@ -1,7 +1,8 @@
 """Tests for GET / PATCH /api/me (the current user's name)."""
 
 from app.ai import agent
-from app.seed import DEMO_USER_EMAIL, DEMO_USER_NAME
+DEMO_USER_NAME = "Demo User"
+DEMO_USER_EMAIL = "demo@mentora.local"
 
 
 def test_get_me_returns_the_demo_user(client, demo_user):

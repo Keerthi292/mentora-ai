@@ -23,20 +23,28 @@ def app_log():
     logger.removeHandler(handler)
 
 
-def test_report_with_a_working_database(engine, app_log):
+@pytest.fixture
+def mcp_settings(monkeypatch):
+    monkeypatch.setattr(settings, "MCP_TOKEN", SecretStr("test-mcp-token"))
+    monkeypatch.setattr(settings, "MCP_USER_ID", 1)
+
+
+def test_report_with_a_working_database(engine, app_log, mcp_settings):
     ok = print_startup_report(engine, ["ask_mentor", "ping"])
 
     text = "\n".join(app_log)
     assert "✓ Database    connected to mentora_test" in text
     assert "✓ Data" in text
     assert "✓ Gemini" in text  # the tests set a fake key
-    assert "✓ MCP         /mcp, tools: ask_mentor, ping" in text
+    # The test database is empty (each test's rows are rolled back)
+    assert "✗ Users       0 accounts, none can log in yet. Sign up in the app" in text
+    assert "✗ MCP         MCP_USER_ID=1 doesn't exist" in text
     # The test database is made without Alembic, so this one is expected to fail
     assert "✗ Migrations" in text
     assert ok is False
 
 
-def test_report_when_the_database_is_down(app_log):
+def test_report_when_the_database_is_down(app_log, mcp_settings):
     down = create_engine("postgresql+psycopg2://nobody:x@127.0.0.1:1/none")
 
     assert print_startup_report(down, ["ping"]) is False
@@ -44,11 +52,11 @@ def test_report_when_the_database_is_down(app_log):
     text = "\n".join(app_log)
     assert "✗ Database" in text and "docker start mentora-postgres" in text
     assert "skipped (no database)" in text
-    assert "✓ MCP" in text
+    assert "✓ MCP         /mcp (Bearer token), acts as user 1 (not checked: no database)" in text
     assert "Started with problems" in app_log[-1]
 
 
-def test_report_without_gemini_key_or_mcp_tools(engine, monkeypatch, app_log):
+def test_report_without_gemini_key_or_mcp_tools(engine, monkeypatch, app_log, mcp_settings):
     monkeypatch.setattr(settings, "GEMINI_API_KEY", SecretStr(" "))
 
     print_startup_report(engine, [])

@@ -8,6 +8,7 @@ from app.config import settings
 from app.database import engine
 from app.mcp_server import mcp, mcp_app
 from app.routers import ai as ai_router
+from app.routers import auth as auth_router
 from app.routers import career_goals as career_goals_router
 from app.routers import conversations as conversations_router
 from app.routers import dashboard as dashboard_router
@@ -19,7 +20,6 @@ from app.routers import resume as resume_router
 from app.routers import skills as skills_router
 from app.routers import uploads as uploads_router
 from app.routers import user_skills as user_skills_router
-from app.seed import run_seed
 from app.startup_report import print_startup_report, setup_logging
 
 setup_logging()  # show the app's log lines (startup report, MCP tool calls) in the terminal
@@ -28,18 +28,9 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1) Make sure the demo user exists (no authentication yet).
-    #    If the database is down, log it and keep starting, so /api/ai/* and
-    #    /mcp still work; database endpoints will fail until it's back.
-    try:
-        run_seed()
-    except Exception as exc:
-        # One line only: the startup report below explains the database problem
-        logger.warning("Could not create the demo user: %s", str(exc).splitlines()[0])
-
-    # 2) The MCP session manager must run while the app is running
+    # The MCP session manager must run while the app is running
     async with mcp.session_manager.run():
-        # 3) One ✓/✗ line per part (database, migrations, Gemini, MCP, ...)
+        # One ✓/✗ line per part (database, migrations, Gemini, MCP, ...)
         try:
             print_startup_report(engine, [tool.name for tool in await mcp.list_tools()])
         except Exception:
@@ -57,6 +48,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router.router)
 app.include_router(ai_router.router)
 app.include_router(me_router.router)
 app.include_router(conversations_router.router)

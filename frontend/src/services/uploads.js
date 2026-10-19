@@ -1,7 +1,7 @@
 // Upload files to the backend (POST /api/uploads) and build their URLs.
 // Used for chat attachments and images in project write-ups.
 
-import { API_BASE_URL, getErrorMessage } from "./api";
+import { API_BASE_URL, checkUnauthorized, getErrorMessage } from "./api";
 
 // Must match backend/app/services/upload_service.py
 export const MAX_UPLOAD_MB = 20;
@@ -21,7 +21,7 @@ export const ACCEPTED_DOCUMENTS = ACCEPTED_FILES.split(",")
   .filter((type) => !type.startsWith("image/"))
   .join(",");
 
-/** Full URL of an uploaded file: "/api/uploads/<id>" -> "<VITE_API_BASE_URL>/api/uploads/<id>" */
+/** URL of an uploaded file ("/api/uploads/<id>"; same site, so the login cookie is sent) */
 export function fileUrl(path) {
   return path?.startsWith("/api/") ? `${API_BASE_URL}${path}` : path;
 }
@@ -52,10 +52,11 @@ export function uploadFile(file, { onProgress, signal } = {}) {
       } catch {
         // not JSON
       }
-      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
-      else reject(new Error(getErrorMessage(data, xhr.status)));
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(data);
+      checkUnauthorized(xhr.status, "/api/uploads");
+      reject(new Error(getErrorMessage(data, xhr.status)));
     };
-    xhr.onerror = () => reject(new Error(`Cannot reach the backend at ${API_BASE_URL}. Is it running?`));
+    xhr.onerror = () => reject(new Error("Cannot reach the backend. Is it running?"));
     xhr.onabort = () => reject(new DOMException("Upload cancelled", "AbortError"));
     signal?.addEventListener("abort", () => xhr.abort());
 

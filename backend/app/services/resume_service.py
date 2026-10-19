@@ -45,7 +45,7 @@ def parse_resume(db: Session, user_id: int, upload_id: str) -> ResumeParseRespon
 
     extracted = extract_resume(Attachment(upload.filename, upload.content_type, data))
 
-    saved_skills = skill_repository.lowercase_names(db)
+    saved_skills = skill_repository.lowercase_names(db, user_id)
     saved_projects = project_repository.lowercase_names(db, user_id)
     return ResumeParseResponse(
         skills=[
@@ -70,17 +70,17 @@ def parse_resume(db: Session, user_id: int, upload_id: str) -> ResumeParseRespon
     )
 
 
-def _get_or_create_skill(db: Session, name: str, category: str | None) -> tuple[Skill, bool]:
+def _get_or_create_skill(db: Session, user_id: int, name: str, category: str | None) -> tuple[Skill, bool]:
     """(skill, True if it was just created)."""
-    skill = skill_repository.get_skill_by_name(db, name)
+    skill = skill_repository.get_skill_by_name(db, name, user_id)
     if skill is not None:
         return skill, False
     try:
-        return skill_repository.create_skill(db, {"name": name, "category": category}), True
+        return skill_repository.create_skill(db, user_id, {"name": name, "category": category}), True
     except IntegrityError:
         # Another request created the same name at the same moment
         db.rollback()
-        return skill_repository.get_skill_by_name(db, name), False
+        return skill_repository.get_skill_by_name(db, name, user_id), False
 
 
 def _write_up(project: ResumeProject) -> str | None:
@@ -101,7 +101,7 @@ def import_resume(db: Session, user_id: int, payload: ResumeImportRequest) -> Re
             continue
         seen.add(item.name.lower())
 
-        skill, created = _get_or_create_skill(db, item.name, item.category)
+        skill, created = _get_or_create_skill(db, user_id, item.name, item.category)
         if created:
             skills_added += 1
         else:

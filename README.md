@@ -37,13 +37,14 @@ mentora-ai/
 │   ├── tests/                  # pytest tests (use a separate test database)
 │   ├── uploads/                # Uploaded files (not committed)
 │   └── app/
-│       ├── main.py             # FastAPI app, routers, CORS, startup (seed + MCP)
+│       ├── main.py             # FastAPI app, routers, CORS, startup (report + MCP)
 │       ├── config.py           # Settings from .env
 │       ├── database.py         # Engine, sessions, get_db()
 │       ├── models.py           # SQLAlchemy models (10 tables)
 │       ├── schemas.py          # Pydantic Create / Update / Response schemas
-│       ├── dependencies.py     # get_current_user_id() -> demo user
-│       ├── seed.py             # Creates the demo user
+│       ├── dependencies.py     # get_current_user_id(): the logged-in user, from the session cookie
+│       ├── security.py         # Password hashing (scrypt) and login tokens
+│       ├── manage.py           # Account commands: list-users, set-login
 │       ├── startup_report.py   # The ✓ / ✗ lines printed when the backend starts
 │       ├── mcp_server.py       # MCP server (tools: ask_mentor, ping)
 │       ├── ai/                 # Mentor: Gemini client, prompts, user profile, attachments, resume reading
@@ -51,7 +52,7 @@ mentora-ai/
 │       ├── services/           # Business rules (404 / 409 checks, ownership)
 │       └── repositories/       # Database queries
 └── frontend/
-    ├── .env                    # VITE_API_BASE_URL (not committed)
+    ├── .env                    # BACKEND_URL for the dev server's /api proxy (not committed)
     ├── .env.example            # Template for .env
     ├── package.json
     ├── vite.config.js
@@ -111,8 +112,9 @@ flowchart TB
     ai -- "prompt + history + files" --> gemini
 ```
 
-Every request goes **router → service → repository → database**. There is no login yet:
-`get_current_user_id()` always returns the demo user, so each query only sees your own data.
+Every request goes **router → service → repository → database**. `get_current_user_id()` reads
+the login cookie (401 if there is none), and every query is filtered by that user, so each account
+only sees its own data.
 
 ### Sequence: chatting with the mentor
 
@@ -209,8 +211,10 @@ DATABASE_URL=postgresql+psycopg2://mentora:YOUR_DB_PASSWORD@localhost:5432/mento
 API_HOST=127.0.0.1
 API_PORT=8002
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-# Optional, defaults to 1
-DEMO_USER_ID=1
+# MCP clients send "Authorization: Bearer <MCP_TOKEN>"; the tools act as MCP_USER_ID.
+# Make a token: python -c "import secrets; print(secrets.token_urlsafe(32))"
+MCP_TOKEN=a-long-random-token
+MCP_USER_ID=1
 
 # Required for the AI mentor (see "About the AI mentor" below)
 GEMINI_API_KEY=your-key-here
@@ -232,18 +236,17 @@ uv run alembic upgrade head
 uv run main.py          # http://API_HOST:API_PORT, restarts when app/ changes
 ```
 
-On startup the demo user (`Demo User`, `demo@mentora.local`) is created automatically, and the
-terminal shows one ✓ / ✗ line per part, so you can see what works:
+On startup the terminal shows one ✓ / ✗ line per part, so you can see what works:
 
 ```text
 INFO:     ── Mentora AI ──────────────────────────────────────────────
 INFO:     ✓ Database    connected to mentora on localhost:5432
-INFO:     ✓ Migrations  up to date (909b0d3d06d8)
-INFO:     ✓ User        "Keerthi" (id 1)
+INFO:     ✓ Migrations  up to date (d8d0a4fedbd1)
+INFO:     ✓ Users       1 account, 1 can log in
 INFO:     ✓ Data        34 skills, 0 learning goals, 6 projects, 4 chats
 INFO:     ✓ Gemini      key set, model gemini-3.5-flash-lite (not called now, to save quota)
 INFO:     ✓ Uploads     .../backend/uploads (2 files, max 20 MB each)
-INFO:     ✓ MCP         /mcp, tools: ask_mentor, ping
+INFO:     ✓ MCP         /mcp (Bearer token), acts as "Keerthi", tools: ask_mentor, ping
 INFO:     ── All systems ready · API docs at /docs ──────────────────────
 ```
 
@@ -263,12 +266,13 @@ cd frontend
 npm install
 ```
 
-Create `frontend/.env` (copy `frontend/.env.example`). Only public values go here: anything
-`VITE_*` ends up in the browser.
+Create `frontend/.env` (copy `frontend/.env.example`):
 
 ```env
-# Required: the backend's address (API_HOST:API_PORT from backend/.env)
-VITE_API_BASE_URL=http://127.0.0.1:8002
+# Required: the backend's address (API_HOST:API_PORT from backend/.env). Only the dev server
+# uses it: the browser calls /api on localhost:5173 and Vite forwards it to the backend, so the
+# login cookie works. No VITE_ prefix, so it is never sent to the browser.
+BACKEND_URL=http://127.0.0.1:8002
 ```
 
 ```bash
@@ -280,6 +284,16 @@ Open http://localhost:5173 (the backend's CORS only allows port 5173).
 ---
 
 ## Features
+
+### Accounts and logins
+
+- **Sign up / Log in** pages (email + password); anyone can create an account, and each account
+  has its own skills, goals, career roles, projects and chats. **Log out** is in the navbar.
+- Passwords are hashed with **scrypt** (Python standard library); the plain password is never stored.
+- The login is a random token in an **httpOnly cookie** (JavaScript can't read it), valid
+  `SESSION_DAYS` (30) days; the database keeps only its SHA-256. Log out deletes the session.
+- An account from before logins existed gets an email and password with
+  `uv run python -m app.manage set-login --user-id 1 --email you@example.com` (asks for the password).
 
 ### Frontend pages
 
@@ -300,12 +314,13 @@ The whole app is dark by default (sun/moon button in the navbar for light), and 
 
 ### Backend API
 
-All user data belongs to the demo user (no `user_id` is sent by the client).
-Another user's data always returns **404**.
+Everything except `/api/auth/*` needs a login (else **401**). The user comes from the login
+cookie, never from the request, and another user's data always returns **404**.
 
 | Resource | Endpoints |
 |---|---|
-| Skills (shared catalog) | `GET/POST /api/skills`, `GET/PATCH/DELETE /api/skills/{id}` |
+| Accounts | `POST /api/auth/register` (`{full_name, email, password}`), `POST /api/auth/login`, `POST /api/auth/logout` |
+| Skills (per user) | `GET/POST /api/skills`, `GET/PATCH/DELETE /api/skills/{id}` |
 | Learning goals | `GET/POST /api/learning-goals`, `GET/PATCH/DELETE /api/learning-goals/{id}` |
 | Learning progress | `GET/POST /api/learning-goals/{goal_id}/progress`, `GET/PATCH/DELETE .../progress/{id}` |
 | User skills | `GET/POST /api/user-skills`, `GET/PATCH/DELETE /api/user-skills/{id}` |
@@ -318,7 +333,7 @@ Another user's data always returns **404**.
 | Resume import | `POST /api/resume/parse` (`{upload_id}` → skills and projects found; saves nothing), `POST /api/resume/import` (saves the ones you picked) |
 | Dashboard | `GET /api/dashboard` (counts per page + learning-goal progress) |
 | Uploads | `POST /api/uploads` (multipart), `GET` / `DELETE /api/uploads/{id}`: images, PDFs, text/code, max `MAX_UPLOAD_MB` |
-| MCP | `/mcp` (Streamable HTTP; tools `ask_mentor`, `ping`) |
+| MCP | `/mcp` (Streamable HTTP; tools `ask_mentor`, `ping`); needs `Authorization: Bearer <MCP_TOKEN>` |
 
 Status codes: `201` created, `204` deleted, `404` not found, `409` duplicate
 (skill name, or a skill the user already has), `422` invalid input.
@@ -335,7 +350,7 @@ Allowed status values:
 
 ### Database tables
 
-`users` (incl. `theme` and today's tip), `skills`, `user_skills`, `learning_goals`, `learning_progress`,
+`users` (incl. `password_hash`, `theme` and today's tip), `sessions` (logins), `skills` (per user), `user_skills`, `learning_goals`, `learning_progress`,
 `career_goals` (incl. `required_skills`), `projects` (incl. `content`, the write-up HTML),
 `uploads` (file details; the files are in `backend/uploads/`), `conversations` and
 `chat_messages` (mentor chats). Deleting a user (or a goal or
@@ -409,7 +424,8 @@ uv run pytest                   # add -v for each test name
 | Task | Command (run inside `backend/`) |
 |---|---|
 | Add a Python dependency | `uv add <package>` (updates `pyproject.toml` and `uv.lock`) |
-| Create the demo user manually | `uv run python -m app.seed` |
+| List accounts | `uv run python -m app.manage list-users` |
+| Give an account an email + password | `uv run python -m app.manage set-login --user-id 1 --email you@example.com` |
 | Apply migrations | `uv run alembic upgrade head` |
 | Create a migration after changing models | `uv run alembic revision --autogenerate -m "describe change"` |
 | Open the database | `docker exec -it mentora-postgres psql -U mentora -d mentora` |
@@ -419,5 +435,5 @@ uv run pytest                   # add -v for each test name
 
 ## Not built yet
 
-- Authentication (the app uses one demo user on purpose for now)
+- Password reset by email, and email verification (accounts are email + password only)
 - Automated frontend tests; dedicated backend tests for career goals and projects CRUD

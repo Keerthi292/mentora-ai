@@ -1,6 +1,6 @@
 // Streams the AI mentor's reply from POST /api/ai/chat/stream.
 
-import { API_BASE_URL, getErrorMessage } from "./api";
+import { API_BASE_URL, checkUnauthorized, getErrorMessage } from "./api";
 import { readSseStream } from "./sse";
 
 /**
@@ -26,11 +26,12 @@ export async function streamMentorReply(message, { attachments = [], history = [
     });
   } catch (err) {
     if (err.name === "AbortError") throw err;
-    throw new Error(`Cannot reach the backend at ${API_BASE_URL}. Is it running?`);
+    throw new Error("Cannot reach the backend. Is it running?");
   }
 
   // Errors before streaming starts (e.g. 422 for an empty message) come back as JSON
   if (!response.ok) {
+    checkUnauthorized(response.status, "/api/ai/chat/stream");
     const data = await response.json().catch(() => null);
     throw new Error(getErrorMessage(data, response.status));
   }

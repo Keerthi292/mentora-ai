@@ -98,7 +98,7 @@ def test_parse_sends_a_text_resume_as_text(client, fake_gemini):
 
 
 def test_parse_marks_items_already_saved(client, fake_gemini, db, demo_user):
-    db.add_all([Skill(name="python"), Project(user_id=demo_user.id, name="MENTORA AI")])
+    db.add_all([Skill(user_id=1, name="python"), Project(user_id=demo_user.id, name="MENTORA AI")])
     db.commit()
 
     body = client.post("/api/resume/parse", json={"upload_id": upload(client)}).json()
@@ -204,7 +204,7 @@ def test_import_twice_skips_everything_the_second_time(client, db):
 
 
 def test_import_keeps_an_existing_skill_level(client, db, demo_user):
-    skill = Skill(name="python")
+    skill = Skill(user_id=1, name="python")
     db.add(skill)
     db.commit()
     db.add(UserSkill(user_id=demo_user.id, skill_id=skill.id, proficiency="expert", status="acquired"))
@@ -216,7 +216,7 @@ def test_import_keeps_an_existing_skill_level(client, db, demo_user):
 
 
 def test_import_links_a_catalog_skill_the_user_has_no_level_for(client, db):
-    db.add(Skill(name="React"))
+    db.add(Skill(user_id=1, name="React"))
     db.commit()
 
     response = client.post("/api/resume/import", json=IMPORT)

@@ -63,7 +63,7 @@ def build_user_profile(db: Session, user_id: int) -> str | None:
     """Return the user's profile as text, or None if the database can't be read."""
     try:
         user = db.get(User, user_id)
-        skills = skill_repository.list_skills(db, limit=MAX_ITEMS)
+        skills = skill_repository.list_skills(db, user_id, limit=MAX_ITEMS)
         user_skills = user_skill_repository.list_user_skills(db, user_id, limit=MAX_ITEMS)
         goals = learning_goal_repository.list_goals(db, user_id, limit=MAX_ITEMS)
         career_goals = career_goal_repository.list_career_goals(db, user_id, limit=MAX_ITEMS)

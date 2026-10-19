@@ -33,8 +33,10 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)  # stored lowercase
     full_name: Mapped[str] = mapped_column(String(255))
+    # scrypt hash (see app/security.py); None = can't log in until a password is set
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -59,13 +61,32 @@ class User(Base):
     )
 
 
+class LoginSession(Base):
+    """A login: the browser keeps a random token in a cookie; only its SHA-256 is stored."""
+
+    __tablename__ = "sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # sha256(token) as hex
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class Skill(Base):
-    """A skill in the shared catalog, e.g. "Python" or "SQL"."""
+    """One of a user's skills, e.g. "Python" or "SQL". Names are unique per user."""
 
     __tablename__ = "skills"
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_skills_user_id_name"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), index=True)
     category: Mapped[str | None] = mapped_column(String(100))
 
     user_skills: Mapped[list["UserSkill"]] = relationship(

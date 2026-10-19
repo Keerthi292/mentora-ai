@@ -62,7 +62,7 @@ def _tool_results(call) -> list[dict]:
 
 
 def test_sets_the_level_of_an_existing_skill(client, gemini, db, demo_user):
-    skill = Skill(name="Docker", category="DevOps")
+    skill = Skill(user_id=1, name="Docker", category="DevOps")
     db.add(skill)
     db.commit()
     gemini.script = [_call("set_skill", name="docker", proficiency="advanced", status="learning"), _text("Done!")]

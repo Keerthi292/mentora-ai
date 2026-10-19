@@ -36,7 +36,7 @@ def get_user_skill(db: Session, user_skill_id: int, user_id: int) -> UserSkill:
 
 def create_user_skill(db: Session, user_id: int, payload: UserSkillCreate) -> UserSkill:
     user_service.ensure_user_exists(db, user_id)
-    if skill_repository.get_skill(db, payload.skill_id) is None:
+    if skill_repository.get_skill(db, payload.skill_id, user_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Skill not found")
     if user_skill_repository.get_by_user_and_skill(db, user_id, payload.skill_id):
         raise _already_added_error()

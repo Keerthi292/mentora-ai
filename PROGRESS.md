@@ -16,7 +16,7 @@ For setup and run instructions, see [README.md](README.md).
 | Database (PostgreSQL, 10 tables, 3 Alembic migrations) | ✅ Done |
 | CRUD APIs for all 6 resources | ✅ Done |
 | Single demo user (no authentication) | ✅ Done |
-| Backend tests (pytest) | ✅ Done (197 tests passing) |
+| Backend tests (pytest) | ✅ Done (218 tests passing) |
 | Frontend setup (React + Vite + Bootstrap) | ✅ Done |
 | Frontend pages: Skills, Goals, Career, Projects | ✅ Done |
 | AI Mentor chat page (streaming) | ✅ Done |
@@ -32,7 +32,7 @@ For setup and run instructions, see [README.md](README.md).
 | Chats, theme and daily tip saved in the database (no localStorage) | ✅ Done |
 | Skill levels on the Skills page | ✅ Done |
 | Page assistant (floating bot that edits Skills / Goals / Career / Projects) | ✅ Done |
-| Authentication | ⏳ Not started (on purpose) |
+| Authentication (email + password, sign up, per-user data) | ✅ Done |
 
 ---
 
@@ -485,7 +485,38 @@ database down and no Gemini key it showed the ✗ lines with hints (copies stopp
 
 ---
 
+## 25. Authentication
+
+**Database** (migration `d8d0a4fedbd1`): `users.password_hash`; new `sessions` table (SHA-256 of the
+login token, user, expiry); **skills now belong to a user** (`skills.user_id`, names unique per user).
+Before, the skills list was shared by everyone. The migration gave the existing 34 skills to their
+owner (Keerthi). Tested on a copy of the database first (up, down, up); a backup was taken.
+
+- **Backend:** `POST /api/auth/register|login|logout`. Passwords hashed with scrypt (stdlib,
+  `app/security.py`); a wrong email and a wrong password give the same 401 and take the same time.
+  The login is a random token in an httpOnly, SameSite=Lax cookie (`SESSION_DAYS`, default 30);
+  only its hash is stored, and log out deletes the session. `get_current_user_id()` now reads the
+  cookie (401 if missing/expired/forged). The demo-user seed and `DEMO_USER_ID` were removed.
+- **MCP:** `/mcp` needs `Authorization: Bearer <MCP_TOKEN>` (random token added to `backend/.env`);
+  tools act as `MCP_USER_ID`. Without a token configured, `/mcp` refuses everything.
+- **Account command:** `uv run python -m app.manage list-users` / `set-login --user-id 1 --email ...`
+  (password typed in, twice), to give the existing account a login.
+- **Frontend:** Log in and Sign up pages (shown at any address while logged out; after logging in,
+  that page opens), Log out button in the navbar, back to the login page on any 401. Vite now
+  proxies `/api` to the backend (`BACKEND_URL` in `frontend/.env`, not sent to the browser), so the
+  cookie works across the two ports; no token is ever handled in JavaScript.
+- **Startup report:** "Users: N accounts, M can log in" and MCP "acts as <name>".
+
+**Verified:** 21 new tests (sign up, log in/out, same 401 for wrong email/password, expired and forged
+cookies, every page needs a login, each account sees only its own data, other users' skills → 404,
+set-login, MCP token). Live: `/mcp` 401 without/with a wrong token, works with the right one.
+Playwright 13/13 with a `[test]` account (deleted afterwards): sign up, own empty data, add a skill,
+still logged in after refresh, log out, wrong password, log in back to the same page, cookie is
+httpOnly and invisible to JavaScript.
+
+---
+
 ## Next steps (not started)
 
 1. pytest tests for career goals and projects CRUD; automated frontend tests.
-2. Authentication (later, by replacing `get_current_user_id()`).
+2. Password reset by email and email verification.

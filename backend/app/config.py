@@ -18,9 +18,14 @@ class Settings(BaseSettings):
     # Frontend addresses allowed to call the API, comma-separated
     CORS_ORIGINS: str
 
-    # No authentication yet: every request acts as this one demo user.
-    # Override with DEMO_USER_ID=... in backend/.env
-    DEMO_USER_ID: int = 1
+    # Logins: a session lasts this many days. COOKIE_SECURE=true when served over HTTPS.
+    SESSION_DAYS: int = Field(30, ge=1)
+    COOKIE_SECURE: bool = False
+
+    # MCP (/mcp) can't use a browser login: clients send "Authorization: Bearer <MCP_TOKEN>"
+    # and the tools act as MCP_USER_ID. Without MCP_TOKEN, /mcp refuses every request.
+    MCP_TOKEN: SecretStr | None = None
+    MCP_USER_ID: int | None = None
 
     # Gemini (Google Gen AI SDK). Get a key at https://aistudio.google.com/apikey
     # and put GEMINI_API_KEY=... in backend/.env. SecretStr keeps the key out of

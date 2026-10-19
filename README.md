@@ -394,8 +394,6 @@ the chat says when it resets; switch `GEMINI_MODEL` (e.g. `gemini-3.5-flash-lite
 
 ## Tests
 
-Backend tests run against a separate PostgreSQL database (`mentora_test`, created
-automatically), so your development data is never touched.
 
 ```bash
 cd backend
@@ -403,9 +401,6 @@ docker start mentora-postgres   # if it's not running
 uv run pytest                   # add -v for each test name
 ```
 
-Current result: **197 passed** (AI chat, attachments, retries, dashboard, uploads, skills,
-learning goals, demo user, current user, mentor chats, resume import, page assistant, startup report).
-Gemini is replaced by a fake in tests, so they need no API key and use no quota.
 
 ---
 

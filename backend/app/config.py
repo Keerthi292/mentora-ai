@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -44,6 +44,16 @@ class Settings(BaseSettings):
     # Uploaded files (chat attachments, project images) are saved here. Not in Git.
     UPLOAD_DIR: Path = BACKEND_DIR / "uploads"
     MAX_UPLOAD_MB: int = Field(20, ge=1)
+
+    @field_validator("database_url")
+    @classmethod
+    def use_psycopg2(cls, url: str) -> str:
+        """Hosts like Render give postgres:// or postgresql:// URLs without a driver; SQLAlchemy
+        would then pick psycopg (v3), but the app installs psycopg2."""
+        for prefix in ("postgres://", "postgresql://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg2://" + url.removeprefix(prefix)
+        return url
 
     @property
     def cors_origins(self) -> list[str]:

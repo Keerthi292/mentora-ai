@@ -66,6 +66,14 @@ def test_report_without_gemini_key_or_mcp_tools(engine, monkeypatch, app_log, mc
     assert "✗ MCP         no MCP tools registered" in text
 
 
+def test_mcp_without_a_token_is_off_not_a_problem(engine, monkeypatch, app_log):
+    monkeypatch.setattr(settings, "MCP_TOKEN", None)
+
+    print_startup_report(engine, ["ping"])
+
+    assert "✓ MCP         off (no MCP_TOKEN in backend/.env" in "\n".join(app_log)
+
+
 def test_mcp_tool_calls_are_logged(app_log):
     assert ping() == "Mentora AI MCP server is running"
     assert app_log[0] == "MCP ▶ ping called"

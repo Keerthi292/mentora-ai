@@ -41,6 +41,11 @@ export async function apiRequest(path, { method = "GET", body } = {}) {
   // 204 No Content (e.g. after DELETE) has no body to parse
   const data = response.status === 204 ? null : await response.json().catch(() => null);
 
+  // A web page instead of JSON: /api reached the frontend's server, not the backend
+  if (response.ok && response.status !== 204 && data === null) {
+    throw new Error("/api isn't forwarded to the backend. Locally: restart npm run dev. Deployed: check the host's /api rewrite rule.");
+  }
+
   if (!response.ok) {
     checkUnauthorized(response.status, path);
     const error = new Error(getErrorMessage(data, response.status));

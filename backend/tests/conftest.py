@@ -30,6 +30,15 @@ TEST_DATABASE_URL = os.getenv(
     _dev_url.set(database="mentora_test").render_as_string(hide_password=False),
 )
 
+# Tests create and drop tables, so never run them against a hosted database (e.g. Neon)
+# by accident. Set TEST_DATABASE_URL to use another server on purpose.
+if not os.getenv("TEST_DATABASE_URL") and _dev_url.host not in ("localhost", "127.0.0.1", "::1"):
+    pytest.exit(
+        f"DATABASE_URL points to {_dev_url.host}, not this computer. The tests won't create "
+        "tables there. Point DATABASE_URL at your local database, or set TEST_DATABASE_URL.",
+        returncode=2,
+    )
+
 
 def _create_test_database_if_missing() -> None:
     test_db_name = make_url(TEST_DATABASE_URL).database

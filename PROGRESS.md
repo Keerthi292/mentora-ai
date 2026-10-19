@@ -3,7 +3,7 @@
 A record of what has been built, in the order it was done.
 For setup and run instructions, see [README.md](README.md).
 
-**Last updated:** 2026-10-16
+**Last updated:** 2026-10-19
 
 ---
 
@@ -13,10 +13,10 @@ For setup and run instructions, see [README.md](README.md).
 |---|---|
 | AI chat API (normal + streaming) | ✅ Done |
 | MCP server at `/mcp` | ✅ Done |
-| Database (PostgreSQL, 8 tables, 2 Alembic migrations) | ✅ Done |
+| Database (PostgreSQL, 10 tables, 3 Alembic migrations) | ✅ Done |
 | CRUD APIs for all 6 resources | ✅ Done |
 | Single demo user (no authentication) | ✅ Done |
-| Backend tests (pytest) | ✅ Done (130 tests passing) |
+| Backend tests (pytest) | ✅ Done (178 tests passing) |
 | Frontend setup (React + Vite + Bootstrap) | ✅ Done |
 | Frontend pages: Skills, Goals, Career, Projects | ✅ Done |
 | AI Mentor chat page (streaming) | ✅ Done |
@@ -27,6 +27,9 @@ For setup and run instructions, see [README.md](README.md).
 | Dashboard (stats, goal progress, AI daily tip) | ✅ Done |
 | Goals/Career cards, rich project write-ups, chat file uploads | ✅ Done |
 | Gemini retries, edit messages, rename chats | ✅ Done |
+| Import skills and projects from a resume | ✅ Done |
+| Greets the user by name (Keerthi) | ✅ Done |
+| Chats, theme and daily tip saved in the database (no localStorage) | ✅ Done |
 | Authentication | ⏳ Not started (on purpose) |
 
 ---
@@ -349,9 +352,64 @@ after 3, 429 not retried). Browser: 14/14 edit + rename checks, 11/11 phone menu
 
 ---
 
+## 17. Import skills and projects from a resume
+
+Two steps, so nothing is saved without the user seeing it:
+
+- **`POST /api/resume/parse`** `{upload_id}`: Gemini reads the uploaded resume (PDF, PNG/JPEG/WebP,
+  or text; GIF → 400) in JSON mode (`llm_client.generate_json`, schema in `app/ai/resume.py`). The
+  answer is tidied (trimmed, de-duplicated ignoring case, clipped to column sizes, unknown levels →
+  intermediate). Each skill/project says `already_saved` (skill in the catalog / project with that name).
+- **`POST /api/resume/import`** `{skills, projects}`: missing skills are added to the catalog and
+  linked in `user_skills` with the resume's level and status `acquired` (an existing level is kept);
+  projects are created as `completed`, technologies comma-joined, and the resume's bullet points
+  (HTML-escaped) become the write-up. Duplicates are skipped, so importing twice is safe.
+- **Frontend:** "Import from resume" on the Skills and Projects pages (`ResumeImportModal.jsx`):
+  drop/choose a file → "Reading your resume..." → toggle skill chips and project cards (new ones
+  pre-selected) → Import → summary. The uploaded file is deleted once it has been read.
+
+**Verified:** 151 backend tests (21 new in `test_resume.py`, Gemini faked). Live Gemini on a sample
+PDF: 6 skills with sensible levels ("5 years" → advanced, "basic" → beginner), 2 projects, the job
+itself not listed as a project, ~2 s.
+
+---
+
+## 18. Greeting the user by name
+
+- **`GET /api/me`** returns the current user; **`PATCH /api/me`** `{full_name}` renames them
+  (`routers/me.py`). The dev user is now named "Keerthi".
+- **Frontend:** `hooks/useMe.js` (one shared request; the placeholder "Demo User" is never shown).
+  Dashboard: "Good morning, Keerthi! 👋" with a pencil to change the name. Mentor home: "Hi Keerthi,
+  I'm Mentora".
+- **Mentor:** the prompt tells Gemini to call the user by first name when greeting, not in every message.
+
+**Verified:** 157 backend tests (6 new in `test_me.py`). Live: "hi" → "Hi Keerthi! It's great to hear from you…".
+
+---
+
+## 19. Everything saved in the database (no localStorage)
+
+**Database** (migration `909b0d3d06d8`, additive): `conversations` (id made by the browser, title,
+created/updated time) and `chat_messages` (position, role, content, attachments as JSON, error /
+stopped / edited); `users.theme`, `users.daily_tip`, `users.daily_tip_date`.
+
+- **Chats:** `/api/conversations`: list (newest first, no messages), get one, `PUT` (create or replace
+  the whole chat), `PATCH` (rename), `DELETE`. Other users' chats → 404. Replies still stream from
+  `/api/ai/chat/stream`; the chat page saves the conversation when the reply is done, loads a chat's
+  messages when it is opened, and shows a warning if a save fails (and retries with the next change).
+- **Theme:** `PATCH /api/me {theme}`; applied when the user loads (the `index.html` pre-paint script is gone,
+  so light mode shows dark for a moment on reload).
+- **Daily tip:** `GET /api/ai/tip` returns today's saved tip; `?refresh=true` ("New tip") asks for a new one.
+- **One-time move:** chats and theme an older version left in the browser were copied into the
+  database once and deleted from localStorage; that code was removed afterwards.
+
+**Verified:** backend tests; live: the open browser moved 3 chats (original dates kept) and the light
+theme into the database; save/load/delete of a test chat; tip saved for the day.
+
+---
+
 ## Next steps (not started)
 
-1. Save chats in the database, so they work across browsers and devices.
-2. UI for skill levels (`user_skills`; the backend API already exists).
-3. pytest tests for career goals and projects CRUD; automated frontend tests.
-4. Authentication (later, by replacing `get_current_user_id()`).
+1. UI for skill levels (`user_skills`; the backend API already exists).
+2. pytest tests for career goals and projects CRUD; automated frontend tests.
+3. Authentication (later, by replacing `get_current_user_id()`).

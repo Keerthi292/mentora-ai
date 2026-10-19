@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import EmptyState from "../components/EmptyState";
 import FilterPills from "../components/FilterPills";
 import FormModal from "../components/FormModal";
+import ResumeImportModal from "../components/ResumeImportModal";
 import StatusBadge, { statusOptions } from "../components/StatusBadge";
 import useResource from "../hooks/useResource";
 import { api } from "../services/api";
@@ -32,10 +33,11 @@ function preview(html) {
 
 // Projects as cards; each opens a page with its full write-up
 function Projects() {
-  const { items, loading, error } = useResource("/api/projects");
+  const { items, loading, error, reload } = useResource("/api/projects");
   const navigate = useNavigate();
   const [filter, setFilter] = useState("all");
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const shown = filter === "all" ? items : items.filter((p) => p.status === filter);
 
@@ -52,9 +54,14 @@ function Projects() {
           <h1 className="h3 mb-0">Projects</h1>
           <div className="text-body-secondary small">What you've built, with write-ups and screenshots</div>
         </div>
-        <button type="button" className="btn btn-gradient" onClick={() => setAdding(true)}>
-          <i className="bi bi-plus-lg me-1" aria-hidden="true" /> New project
-        </button>
+        <div className="d-flex flex-wrap gap-2">
+          <button type="button" className="btn btn-outline-secondary" onClick={() => setImporting(true)}>
+            <i className="bi bi-file-earmark-person me-1" aria-hidden="true" /> Import from resume
+          </button>
+          <button type="button" className="btn btn-gradient" onClick={() => setAdding(true)}>
+            <i className="bi bi-plus-lg me-1" aria-hidden="true" /> New project
+          </button>
+        </div>
       </div>
 
       {items.length > 0 && (
@@ -131,6 +138,8 @@ function Projects() {
           onClose={() => setAdding(false)}
         />
       )}
+
+      {importing && <ResumeImportModal onClose={() => setImporting(false)} onImported={reload} />}
     </>
   );
 }

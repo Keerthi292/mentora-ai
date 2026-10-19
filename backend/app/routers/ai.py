@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -9,6 +11,7 @@ from app.ai.llm_client import LLMError
 from app.ai.schemas import ChatRequest, ChatResponse, TipResponse
 from app.database import get_db
 from app.dependencies import get_current_user_id
+from app.repositories import user_repository
 
 router = APIRouter(prefix="/api/ai", tags=["AI Mentor"])
 
@@ -39,15 +42,27 @@ def chat(
 
 @router.get("/tip", response_model=TipResponse)
 def daily_tip(
+    refresh: bool = False,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ) -> TipResponse:
-    """A short personal tip from the mentor, based on the user's profile."""
+    """A short personal tip from the mentor, based on the user's profile.
+
+    Saved for the day, so Gemini is asked once a day; `?refresh=true` asks for a new one.
+    """
+    user = user_repository.get_user(db, user_id)
+    today = date.today()
+    if user and user.daily_tip and user.daily_tip_date == today and not refresh:
+        return TipResponse(tip=user.daily_tip)
+
     profile = build_user_profile(db, user_id)
     try:
-        return get_daily_tip(profile)
+        tip = get_daily_tip(profile)
     except LLMError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    if user:
+        user_repository.update_user(db, user, {"daily_tip": tip.tip, "daily_tip_date": today})
+    return tip
 
 
 # A plain `def` so the database read runs in a worker thread; the reply itself

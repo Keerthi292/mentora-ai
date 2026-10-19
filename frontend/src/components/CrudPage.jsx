@@ -15,9 +15,10 @@ import FormModal from "./FormModal";
  *   columns     Table columns: [{ header: "Name", render: (item) => item.name }]
  *   getLabel    Short text for an item in the delete dialog, e.g. (item) => item.name
  *   emptyText   Shown when the list is empty
+ *   actions     Optional extra header buttons: (reload) => <button ...>
  */
-function CrudPage({ title, itemName, apiPath, fields, columns, getLabel, emptyText }) {
-  const { items, loading, error, create, update, remove } = useResource(apiPath);
+function CrudPage({ title, itemName, apiPath, fields, columns, getLabel, emptyText, actions }) {
+  const { items, loading, error, reload, create, update, remove } = useResource(apiPath);
 
   // `editing` is null (modal closed), "new" (adding) or the item being edited
   const [editing, setEditing] = useState(null);
@@ -29,9 +30,12 @@ function CrudPage({ title, itemName, apiPath, fields, columns, getLabel, emptyTe
     <>
       <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <h1 className="h3 mb-0">{title}</h1>
-        <button type="button" className="btn btn-gradient" onClick={() => setEditing("new")}>
-          + Add {itemName}
-        </button>
+        <div className="d-flex flex-wrap gap-2">
+          {actions?.(reload)}
+          <button type="button" className="btn btn-gradient" onClick={() => setEditing("new")}>
+            + Add {itemName}
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert alert-danger">Could not load {title.toLowerCase()}: {error}</div>}

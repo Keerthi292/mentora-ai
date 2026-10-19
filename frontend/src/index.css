@@ -1286,3 +1286,37 @@ body {
     opacity: 1;
   }
 }
+
+/* Resume import */
+.resume-drop {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  border: 2px dashed var(--bs-border-color);
+  border-radius: 1rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.resume-drop:hover,
+.resume-drop:focus-visible {
+  border-color: var(--mentora-violet);
+  background: var(--glow-1);
+  outline: none;
+}
+
+.resume-chip {
+  cursor: pointer;
+}
+
+.resume-chip:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.resume-project {
+  cursor: pointer;
+}
+
+.min-w-0 {
+  min-width: 0;
+}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import useMe from "../../hooks/useMe";
 import BotAvatar from "../BotAvatar";
 
 // Quick-start ideas. Clicking one opens a new chat and sends the prompt.
@@ -36,6 +37,7 @@ const TAGLINES = [
 /** The Mentor landing screen, shown before a chat is opened. */
 function MentorHome({ lastConversation, onNewChat, onOpen, onSuggestion }) {
   const [tagline, setTagline] = useState(0);
+  const { name } = useMe();
 
   // Rotate the tagline every few seconds
   useEffect(() => {
@@ -52,7 +54,7 @@ function MentorHome({ lastConversation, onNewChat, onOpen, onSuggestion }) {
         </div>
 
         <h1 className="display-6 fw-bold mb-2">
-          Hi, I'm <span className="text-gradient">Mentora</span>
+          Hi{name && ` ${name}`}, I'm <span className="text-gradient">Mentora</span>
         </h1>
         <p className="lead text-body-secondary mb-4">
           Your personal AI mentor. I'm here to help you{" "}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import BotAvatar from "../components/BotAvatar";
+import useMe from "../hooks/useMe";
 
 // Links shown in the navbar
 const NAV_LINKS = [
@@ -13,21 +14,26 @@ const NAV_LINKS = [
   { to: "/mentor", label: "Mentor", icon: "bi-robot" },
 ];
 
-const THEME_KEY = "mentora.theme"; // also read in index.html, before the page draws
-
-// Dark by default; the choice is remembered in this browser
+// Dark by default; the choice is saved on the user in the database
 function useTheme() {
-  const [theme, setTheme] = useState(() => document.documentElement.getAttribute("data-bs-theme") || "dark");
+  const { me, update } = useMe();
+  const [theme, setTheme] = useState("dark");
+
+  // Apply the saved theme once the user has loaded
+  useEffect(() => {
+    if (me?.theme) setTheme(me.theme);
+  }, [me?.theme]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-bs-theme", theme);
+  }, [theme]);
 
   const toggle = () => {
     const next = theme === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-bs-theme", next);
-    try {
-      localStorage.setItem(THEME_KEY, next);
-    } catch {
-      // storage blocked: the theme still changes for this visit
-    }
-    setTheme(next);
+    setTheme(next); // change right away; saving happens in the background
+    update({ theme: next }).catch(() => {
+      // not saved (backend down): the theme still changes for this visit
+    });
   };
 
   return [theme, toggle];

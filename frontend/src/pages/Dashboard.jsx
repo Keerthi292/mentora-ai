@@ -2,13 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import BotAvatar from "../components/BotAvatar";
+import FormModal from "../components/FormModal";
 import StatusBadge from "../components/StatusBadge";
+import useMe from "../hooks/useMe";
 import { api } from "../services/api";
 import { dueText, formatDate } from "../utils/format";
-
-const TIP_KEY = "mentora.dailyTip"; // { date: "YYYY-MM-DD", tip }
-
-const todayKey = () => new Date().toLocaleDateString("en-CA"); // local "YYYY-MM-DD"
 
 function greeting() {
   const hour = new Date().getHours();
@@ -21,6 +19,8 @@ function greeting() {
 function Dashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const { me, name, update } = useMe();
+  const [editingName, setEditingName] = useState(false);
 
   useEffect(() => {
     api
@@ -61,13 +61,35 @@ function Dashboard() {
         <BotAvatar size={52} float />
         <div>
           <h1 className="h3 mb-0">
-            {greeting()}! <span className="wave" aria-hidden="true">👋</span>
+            {greeting()}
+            {name && `, ${name}`}! <span className="wave" aria-hidden="true">👋</span>
+            {me && (
+              <button
+                type="button"
+                className="btn btn-link btn-sm text-body-secondary p-0 ms-2 align-baseline"
+                title="Change your name"
+                aria-label="Change your name"
+                onClick={() => setEditingName(true)}
+              >
+                <i className="bi bi-pencil" aria-hidden="true" />
+              </button>
+            )}
           </h1>
           <div className="text-body-secondary small">
             {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
           </div>
         </div>
       </div>
+
+      {editingName && (
+        <FormModal
+          title="What should Mentora call you?"
+          fields={[{ name: "full_name", label: "Your name", required: true, maxLength: 255, placeholder: "e.g. Keerthi" }]}
+          initialValues={{ full_name: me?.full_name === "Demo User" ? "" : me?.full_name }}
+          onSubmit={(data) => update({ full_name: data.full_name })}
+          onClose={() => setEditingName(false)}
+        />
+      )}
 
       {error && (
         <div className="alert alert-danger">
@@ -213,31 +235,19 @@ function GoalProgress({ goals }) {
   );
 }
 
-// One personal tip a day from the mentor (Gemini). Cached in this browser for the
-// day so it doesn't use API quota on every visit; "New tip" asks for another.
+// One personal tip a day from the mentor (Gemini). The backend saves it for the
+// day, so Gemini isn't asked on every visit; "New tip" asks for another.
 function TipCard() {
-  const [tip, setTip] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(TIP_KEY));
-      return saved?.date === todayKey() ? saved.tip : "";
-    } catch {
-      return "";
-    }
-  });
+  const [tip, setTip] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchTip = useCallback(async () => {
+  const fetchTip = useCallback(async (refresh = false) => {
     setLoading(true);
     setError("");
     try {
-      const data = await api.get("/api/ai/tip");
+      const data = await api.get(`/api/ai/tip${refresh ? "?refresh=true" : ""}`);
       setTip(data.tip);
-      try {
-        localStorage.setItem(TIP_KEY, JSON.stringify({ date: todayKey(), tip: data.tip }));
-      } catch {
-        // storage blocked: the tip just isn't cached
-      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -245,14 +255,13 @@ function TipCard() {
     }
   }, []);
 
-  // First visit of the day: ask for a tip. The ref stops React's development
-  // double-run (StrictMode) from asking Gemini twice.
+  // Load today's tip. The ref stops React's development double-run (StrictMode)
+  // from asking Gemini twice on the first visit of the day.
   const requestedRef = useRef(false);
   useEffect(() => {
-    if (tip || requestedRef.current) return;
+    if (requestedRef.current) return;
     requestedRef.current = true;
     fetchTip();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -283,7 +292,7 @@ function TipCard() {
         </div>
 
         <div className="d-flex flex-wrap gap-2 mt-3">
-          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={fetchTip} disabled={loading}>
+          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => fetchTip(true)} disabled={loading}>
             <i className={`bi bi-arrow-repeat me-1 ${loading ? "spin" : ""}`} aria-hidden="true" />
             {error ? "Try again" : "New tip"}
           </button>

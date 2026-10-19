@@ -5,16 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
     <title>Mentora AI</title>
-    <script>
-      // Apply the saved theme before the page draws, so there's no flash. Dark by default.
-      try {
-        if (localStorage.getItem("mentora.theme") === "light") {
-          document.documentElement.setAttribute("data-bs-theme", "light");
-        }
-      } catch {
-        // storage blocked: keep dark
-      }
-    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -70,6 +70,7 @@ def no_real_gemini(monkeypatch):
         raise AssertionError("Tests must not call the real Gemini API; use the fake_gemini fixture.")
 
     monkeypatch.setattr(settings, "GEMINI_API_KEY", SecretStr("test-key-not-real"))
+    monkeypatch.setattr(llm_client, "_create_client", _refuse)
 
 
 @pytest.fixture(autouse=True)
@@ -78,7 +79,6 @@ def upload_dir(tmp_path, monkeypatch):
     folder = tmp_path / "uploads"
     monkeypatch.setattr(settings, "UPLOAD_DIR", folder)
     return folder
-    monkeypatch.setattr(llm_client, "_create_client", _refuse)
 
 
 @pytest.fixture

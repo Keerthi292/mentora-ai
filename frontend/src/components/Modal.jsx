@@ -3,8 +3,9 @@ import { useEffect } from "react";
 /**
  * A Bootstrap-styled modal controlled by React state (no Bootstrap JS needed).
  * Render it only while it should be open: {isOpen && <Modal ...>}
+ * `size` is "sm", "lg" or "xl" for a narrower/wider dialog.
  */
-function Modal({ title, onClose, children, footer }) {
+function Modal({ title, onClose, children, footer, size }) {
   useEffect(() => {
     // Close on Escape, and stop the page behind the modal from scrolling
     const onKeyDown = (event) => event.key === "Escape" && onClose();
@@ -19,7 +20,7 @@ function Modal({ title, onClose, children, footer }) {
   return (
     <>
       <div className="modal d-block" tabIndex="-1" role="dialog" aria-modal="true">
-        <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div className={`modal-dialog modal-dialog-centered modal-dialog-scrollable ${size ? `modal-${size}` : ""}`}>
           <div className="modal-content">
             <div className="modal-header">
               <h2 className="modal-title h5">{title}</h2>

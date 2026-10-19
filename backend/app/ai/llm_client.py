@@ -1,24 +1,29 @@
 """Talks to the Gemini API (official Google Gen AI SDK, package `google-genai`).
 
-The rest of the app only sees two functions, `generate_response` and
-`stream_response`, plus `LLMError`. Every failure is raised as an LLMError with
-a message that is safe to show to the user; nothing here returns a fake reply.
+The rest of the app only sees `generate_response`, `stream_response` and
+`generate_json` (structured answers, e.g. a parsed resume), plus `LLMError`.
+Every failure is raised as an LLMError with a message that is safe to show to
+the user; nothing here returns a fake reply.
 """
 
 import logging
 from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import aclosing
 from functools import lru_cache
+from typing import TypeVar
 
 import httpx
 from google import genai
 from google.genai import errors, types
+from pydantic import BaseModel, ValidationError
 
 from app.ai.attachments import Attachment
 from app.ai.schemas import ChatMessage
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 class LLMError(Exception):
@@ -227,6 +232,31 @@ def generate_response(
     if not text:
         raise LLMError(_blocked_message(response))
     return text
+
+
+def generate_json(system_prompt: str, parts: Sequence[types.Part], schema: type[ModelT]) -> ModelT:
+    """Ask for a reply shaped like the Pydantic model `schema` (Gemini's JSON mode) and parse it."""
+    client = _get_client()
+    try:
+        response = client.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=[types.Content(role="user", parts=list(parts))],
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                response_mime_type="application/json",
+                response_schema=schema,
+            ),
+        )
+    except Exception as exc:
+        raise _to_llm_error(exc) from exc
+
+    if not response.text:
+        raise LLMError(_blocked_message(response))
+    try:
+        return schema.model_validate_json(response.text)
+    except ValidationError as exc:
+        logger.warning("Gemini returned JSON that doesn't match %s: %s", schema.__name__, exc)
+        raise LLMError("The AI service returned an unexpected answer. Please try again.") from exc
 
 
 async def stream_response(

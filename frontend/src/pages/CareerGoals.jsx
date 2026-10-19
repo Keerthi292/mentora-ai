@@ -7,7 +7,6 @@ import EmptyState from "../components/EmptyState";
 import FormModal from "../components/FormModal";
 import ProgressRing from "../components/ProgressRing";
 import useResource from "../hooks/useResource";
-import { api } from "../services/api";
 import { splitList } from "../utils/format";
 
 // Only what matters: the role, the skills it needs, and optional notes
@@ -43,7 +42,6 @@ function CareerGoals() {
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("focus", refresh);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const addToMySkills = async (name) => {

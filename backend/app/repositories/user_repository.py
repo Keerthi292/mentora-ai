@@ -7,3 +7,15 @@ from app.models import User
 
 def user_exists(db: Session, user_id: int) -> bool:
     return db.get(User, user_id) is not None
+
+
+def get_user(db: Session, user_id: int) -> User | None:
+    return db.get(User, user_id)
+
+
+def update_user(db: Session, user: User, changes: dict) -> User:
+    for field, value in changes.items():
+        setattr(user, field, value)
+    db.commit()
+    db.refresh(user)
+    return user

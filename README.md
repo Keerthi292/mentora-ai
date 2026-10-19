@@ -75,6 +75,85 @@ The backend follows a layered design: **router → service → repository → da
 
 ---
 
+## How it works
+
+Two [Mermaid](https://mermaid.js.org/) diagrams (GitHub and VS Code's Markdown preview draw them):
+the overall flow, and the sequence of one mentor chat message.
+
+### Flow: architecture
+
+```mermaid
+flowchart TB
+    user(["You (browser)"])
+
+    subgraph FE["Frontend: React + Vite (localhost:5173)"]
+        direction LR
+        pages["Pages<br/>Dashboard, Skills, Goals,<br/>Career, Projects, Mentor"] --> services["services/<br/>api.js, chats.js, sse.js, uploads.js"]
+    end
+
+    subgraph BE["Backend: FastAPI (127.0.0.1:8002)"]
+        direction LR
+        routers["routers/<br/>HTTP endpoints"] --> svc["services/<br/>rules, 404 / 409 checks"] --> repos["repositories/<br/>database queries"]
+        routers --> ai["ai/<br/>prompts, profile, Gemini client"]
+        mcp["MCP server<br/>/mcp"] --> ai
+        ai -- "your profile" --> repos
+    end
+
+    subgraph EXT["Storage and services"]
+        direction LR
+        db[("PostgreSQL in Docker<br/>users, skills, goals, projects,<br/>chats, uploads, ...")]
+        files[("backend/uploads/<br/>uploaded files")]
+        gemini["Google Gemini API"]
+    end
+
+    user --> FE
+    services -- "JSON over HTTP (chat replies as SSE)" --> routers
+    repos --> db
+    svc --> files
+    ai -- "prompt + history + files" --> gemini
+```
+
+Every request goes **router → service → repository → database**. There is no login yet:
+`get_current_user_id()` always returns the demo user, so each query only sees your own data.
+
+### Sequence: chatting with the mentor
+
+The reply streams in word by word (Server-Sent Events). When it is finished, the page saves the
+whole conversation in the database.
+
+```mermaid
+sequenceDiagram
+    actor U as You
+    participant C as Mentor page
+    participant API as Backend
+    participant DB as PostgreSQL
+    participant G as Gemini
+
+    U->>C: Type a message (and attach files)
+    opt Files attached
+        C->>API: POST /api/uploads (one per file)
+        API-->>C: {id, filename, url}
+    end
+    C->>API: POST /api/ai/chat/stream {message, history, attachments}
+    API->>DB: Read your profile (name, skills, goals, career, projects)
+    API->>DB: Look up the attached files (bytes from backend/uploads/)
+    API->>G: System prompt + profile + recent history + files
+    loop While Gemini writes
+        G-->>API: Text chunk
+        API-->>C: data: {"token": "..."}
+        C-->>U: Text appears
+    end
+    API-->>C: data: [DONE]
+    C->>API: PUT /api/conversations/{id} (title + all messages)
+    API->>DB: Replace the chat's messages
+    Note over C,DB: Reopening the chat later loads it with GET /api/conversations/{id}
+```
+
+If Gemini fails (no key, quota used up, timeout), the stream sends `data: {"error": "..."}`
+instead of `[DONE]`, and the error is shown in the reply bubble and saved with the chat.
+
+---
+
 ## Getting started
 
 ### Prerequisites
@@ -251,76 +330,34 @@ and a text summary of your profile (skills, goals, career roles, projects).
 
 ## About the AI mentor
 
-Replies come from **Google Gemini**, called from `backend/app/ai/llm_client.py`
-with the official Google Gen AI SDK (`google-genai`). The streaming endpoint
-forwards Gemini's text chunks as they arrive.
+Replies come from **Google Gemini** (`google-genai` SDK, `backend/app/ai/llm_client.py`).
 
-**It knows your data.** Before each reply, `backend/app/ai/context.py` reads what you
-saved on the Skills, Learning Goals (with the latest progress update), Career Goals and
-Projects pages and adds it to the prompt, so the mentor answers for *you*. Add or edit
-something on those pages and the next message already uses it. Each list is capped at
-20 items and long descriptions are shortened, to keep requests fast and cheap. If the
-database can't be read, the mentor still answers, just without your profile.
+- **Knows your data:** each reply includes your name, skills, goals (with latest progress), career
+  roles and projects (`ai/context.py`, max 20 per list). If the database is down it still answers.
+- **Chats like ChatGPT:** streaming Markdown replies, chat list, follow-ups (newest
+  `CHAT_HISTORY_LIMIT` = 20 messages sent), edit a sent message, rename chats. Saved in the database.
+- **Files:** attach up to 5 images, PDFs or code/text files per message (`MAX_UPLOAD_MB` each).
+  The type is checked from the content; SVG, Word and video are rejected.
+- **Greets you by name**, and **Import from resume** (Skills / Projects pages) finds your skills
+  and projects in a PDF, image or text resume; you pick what to save.
 
-**The Mentor page** opens on a landing screen (animated robot, quick-start ideas); **Start a
-new chat** or a suggestion card opens the chat. Replies render as Markdown with a copy button,
-and the robot jitters while it thinks. The whole app is dark by default; the sun/moon button
-in the navbar switches to light (saved in the database).
+**Setup:** create a key at [Google AI Studio](https://aistudio.google.com/apikey), put
+`GEMINI_API_KEY=...` in `backend/.env` and restart the backend. Only the backend reads the key;
+never put it in `frontend/.env` (anything `VITE_*` reaches the browser). Change models with
+`GEMINI_MODEL`, no code changes needed.
 
-**It remembers the conversation.** The chat page works like ChatGPT: a list of your
-chats on the left (grouped Today / Yesterday / ...), **+ New chat**, and a delete button
-per chat. Each new message is sent with the earlier messages of that chat, so follow-ups
-like "explain the second point" work. Only the newest `CHAT_HISTORY_LIMIT` messages
-(default 20) are sent to Gemini. Chats are saved in the database when each reply finishes,
-so they are the same in every browser and on every device.
+**Free tier:** about **20 requests per day per model** (chat messages and tips). When it runs out
+the chat says when it resets; switch `GEMINI_MODEL` (e.g. `gemini-3.5-flash-lite`) or enable billing.
 
-**Edit and rename.** Hover over a message you sent and click **Edit**: the replies after it are
-replaced and the mentor answers the edited text. The ✏️ next to a chat in the sidebar renames it.
-
-**Images and files.** The **+** button next to the message box (also on the landing screen)
-uploads images (PNG, JPEG, WebP, GIF) or files (PDF, code, text, CSV, JSON); you can also drop
-or paste them. Up to 5 per message, `MAX_UPLOAD_MB` (20) each. Gemini reads them, and still sees
-them in follow-up questions. The file type is checked from the content, not the name, and SVG,
-Word and video files are rejected.
-
-**It greets you by name.** Your name (from `GET /api/me`) is in the profile, and the mentor is
-told to use your first name when greeting you, not in every message.
-
-**Import from resume.** On the Skills or Projects page, **Import from resume** takes a PDF,
-image (PNG, JPEG, WebP) or text file. Gemini reads it (JSON mode) and lists the skills, with a
-level, and the projects, with technologies and bullet points. You tick what to keep: skills are
-added to the catalog with their level, and projects are saved as completed with the bullet points
-as their write-up. Anything already saved is skipped, and the uploaded file is deleted after reading.
-
-**Get an API key**
-
-1. Open [Google AI Studio](https://aistudio.google.com/apikey) and sign in with a Google account.
-2. Click **Create API key** (pick or create a Google Cloud project when asked).
-3. Copy the key into `backend/.env` as `GEMINI_API_KEY=...` and restart the backend.
-
-The key is only read by the backend. It is never sent to the frontend, returned by
-the API, or logged, and `backend/.env` is in `.gitignore`. Never put it in
-`frontend/.env`: anything `VITE_*` ends up in the browser.
-
-**Change the model** with `GEMINI_MODEL` in `backend/.env` (see the
-[model list](https://ai.google.dev/gemini-api/docs/models)); no code changes needed.
-
-**Free-tier limits:** a free API key allows only about **20 requests per day per model**
-(every chat message and dashboard tip counts). When it runs out, the chat says so and when it
-resets. To keep going, switch `GEMINI_MODEL` (each model has its own daily limit, e.g.
-`gemini-3.5-flash-lite`) or enable billing in Google AI Studio. Usage: https://ai.dev/rate-limit
-
-**When Gemini fails** there is no fake answer:
+**When Gemini fails** there is no fake answer; the error is shown in the reply bubble:
 
 | Problem | `POST /api/ai/chat` | `POST /api/ai/chat/stream` |
 |---|---|---|
-| `GEMINI_API_KEY` missing, key rejected, model not found | `503` | `data: {"error": "..."}` |
+| Key missing or rejected, model not found | `503` | `data: {"error": "..."}` |
 | Rate limit / quota | `429` | `data: {"error": "..."}` |
-| Gemini down, timeout, network error (after 3 automatic tries) | `503` / `504` | `data: {"error": "..."}` |
-| A file attached to the message no longer exists | `400` | `400` |
+| Gemini down, timeout (after 3 tries) | `503` / `504` | `data: {"error": "..."}` |
+| Attached file no longer exists | `400` | `400` |
 | Stream cut off midway | | tokens so far, then `data: {"error": "..."}` (no `[DONE]`) |
-
-The chat page shows the error message in the reply bubble.
 
 ---
 

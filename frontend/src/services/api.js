@@ -1,7 +1,7 @@
 // Small wrapper around fetch() for calling the Mentora AI backend.
 //
 // Requests go to /api on this same site; Vite forwards them to the backend
-// (BACKEND_URL in frontend/.env). So the login cookie (httpOnly, set by the
+// (API_HOST:API_PORT in backend/.env). So the login cookie (httpOnly, set by the
 // backend) is sent automatically, and no token is ever handled in JavaScript.
 const API_BASE_URL = "";
 

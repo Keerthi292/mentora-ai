@@ -52,8 +52,6 @@ mentora-ai/
 │       ├── services/           # Business rules (404 / 409 checks, ownership)
 │       └── repositories/       # Database queries
 └── frontend/
-    ├── .env                    # BACKEND_URL for the dev server's /api proxy (not committed)
-    ├── .env.example            # Template for .env
     ├── package.json
     ├── vite.config.js
     └── src/
@@ -266,14 +264,9 @@ cd frontend
 npm install
 ```
 
-Create `frontend/.env` (copy `frontend/.env.example`):
-
-```env
-# Required: the backend's address (API_HOST:API_PORT from backend/.env). Only the dev server
-# uses it: the browser calls /api on localhost:5173 and Vite forwards it to the backend, so the
-# login cookie works. No VITE_ prefix, so it is never sent to the browser.
-BACKEND_URL=http://127.0.0.1:8002
-```
+The frontend has no `.env` of its own: the dev server reads `API_HOST` and `API_PORT` from
+`backend/.env` and forwards `/api` on localhost:5173 to the backend, so the login cookie works.
+Nothing from `backend/.env` is sent to the browser.
 
 ```bash
 npm run dev
@@ -389,7 +382,7 @@ Replies come from **Google Gemini** (`google-genai` SDK, `backend/app/ai/llm_cli
 
 **Setup:** create a key at [Google AI Studio](https://aistudio.google.com/apikey), put
 `GEMINI_API_KEY=...` in `backend/.env` and restart the backend. Only the backend reads the key;
-never put it in `frontend/.env` (anything `VITE_*` reaches the browser). Change models with
+never put it in frontend code. Change models with
 `GEMINI_MODEL`, no code changes needed.
 
 **Free tier:** about **20 requests per day per model** (chat messages and tips). When it runs out

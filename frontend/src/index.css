@@ -397,13 +397,12 @@ body {
 }
 
 .user-avatar {
-  display: inline-grid;
-  place-items: center;
+  /* The user's side of the chat: assets/user-avatar.png (replace it with any square image) */
+  display: block;
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: var(--bs-secondary-bg);
-  border: 1px solid var(--bs-border-color);
+  object-fit: cover;
 }
 
 .msg-action {

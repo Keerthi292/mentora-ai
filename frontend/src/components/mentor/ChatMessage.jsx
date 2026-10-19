@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import userAvatar from "../../assets/user-avatar.png";
 import BotAvatar from "../BotAvatar";
 import { fileIcon, fileUrl, formatSize } from "../../services/uploads";
 
@@ -34,9 +35,7 @@ function ChatMessage({ message, isWaiting = false, isStreaming = false, canEdit 
     <div className={`d-flex gap-2 mb-3 msg-enter ${isUser ? "flex-row-reverse" : ""}`}>
       <div className="flex-shrink-0 pt-1">
         {isUser ? (
-          <span className="user-avatar" aria-hidden="true">
-            <i className="bi bi-person-fill" />
-          </span>
+          <img className="user-avatar" src={userAvatar} alt="" aria-hidden="true" />
         ) : (
           <BotAvatar size={34} thinking={isWaiting || isStreaming} />
         )}

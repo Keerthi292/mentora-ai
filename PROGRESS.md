@@ -514,6 +514,12 @@ Playwright 13/13 with a `[test]` account (deleted afterwards): sign up, own empt
 still logged in after refresh, log out, wrong password, log in back to the same page, cookie is
 httpOnly and invisible to JavaScript.
 
+## 26. One .env file
+
+`frontend/.env` and `frontend/.env.example` are gone; `backend/.env` is the project's only `.env`.
+The Vite dev server reads `API_HOST` and `API_PORT` from it for the `/api` proxy (in the config
+only, never sent to the browser). The stale `DEMO_USER_ID` was removed from `backend/.env.example`.
+
 ---
 
 ## Next steps (not started)

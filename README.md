@@ -205,10 +205,9 @@ just add the lines you're missing). **Private addresses, passwords and keys live
 ```env
 # Required: the same password as POSTGRES_PASSWORD above
 DATABASE_URL=postgresql+psycopg2://mentora:YOUR_DB_PASSWORD@localhost:5432/mentora
-# Required: where the backend runs, and which frontend addresses may call it (CORS)
+# Optional, these are the defaults: where `uv run main.py` runs the backend
 API_HOST=127.0.0.1
 API_PORT=8002
-CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 # MCP clients send "Authorization: Bearer <MCP_TOKEN>"; the tools act as MCP_USER_ID.
 # Make a token: python -c "import secrets; print(secrets.token_urlsafe(32))"
 MCP_TOKEN=a-long-random-token

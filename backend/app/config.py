@@ -12,11 +12,13 @@ class Settings(BaseSettings):
     # Private addresses and passwords live only in backend/.env (see .env.example), never in code.
     # DATABASE_URL, e.g. postgresql+psycopg2://USER:PASSWORD@HOST:5432/DATABASE
     database_url: str
-    # Where the backend runs (backend/main.py)
-    API_HOST: str
-    API_PORT: int
-    # Frontend addresses allowed to call the API, comma-separated
-    CORS_ORIGINS: str
+    # Where `python main.py` runs the backend locally (the frontend's dev server reads them too).
+    # A host like Render starts uvicorn with its own --host/--port instead.
+    API_HOST: str = "127.0.0.1"
+    API_PORT: int = 8002
+    # Other sites allowed to call the API from a browser, comma-separated. Usually not needed:
+    # the frontend calls /api on its own address and that is forwarded to the backend.
+    CORS_ORIGINS: str = ""
 
     # Logins: a session lasts this many days. COOKIE_SECURE=true when served over HTTPS.
     SESSION_DAYS: int = Field(30, ge=1)

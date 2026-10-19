@@ -24,7 +24,6 @@ progress, your career goals and your projects, and gives you an AI mentor to cha
 ```
 mentora-ai/
 ├── README.md
-├── PROGRESS.md                 # What has been built so far
 ├── backend/
 │   ├── .env                    # DATABASE_URL, GEMINI_API_KEY, ... (not committed)
 │   ├── .env.example            # Template for .env

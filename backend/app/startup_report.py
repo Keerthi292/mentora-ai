@@ -86,7 +86,8 @@ def _mcp(engine: Engine, tools: list[str]) -> str:
     if not tools:
         raise RuntimeError("no MCP tools registered")
     if not (settings.MCP_TOKEN and settings.MCP_TOKEN.get_secret_value().strip()):
-        raise RuntimeError("MCP_TOKEN is not set in backend/.env: /mcp refuses every request")
+        # MCP is optional: without a token /mcp stays closed, and the web app works the same
+        return "off (no MCP_TOKEN in backend/.env, so /mcp refuses every request)"
     if settings.MCP_USER_ID is None:
         raise RuntimeError("MCP_USER_ID is not set in backend/.env: ask_mentor doesn't know whose data to use")
     try:

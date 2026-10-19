@@ -5,10 +5,11 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.ai.agent import attachment_ids, get_daily_tip, get_mentor_response, stream_mentor_response
+from app.ai.assistant import run_page_assistant
 from app.ai.attachments import Attachment, load_attachments
 from app.ai.context import build_user_profile
 from app.ai.llm_client import LLMError
-from app.ai.schemas import ChatRequest, ChatResponse, TipResponse
+from app.ai.schemas import AssistantRequest, AssistantResponse, ChatRequest, ChatResponse, TipResponse
 from app.database import get_db
 from app.dependencies import get_current_user_id
 from app.repositories import user_repository
@@ -63,6 +64,19 @@ def daily_tip(
     if user:
         user_repository.update_user(db, user, {"daily_tip": tip.tip, "daily_tip_date": today})
     return tip
+
+
+@router.post("/assistant", response_model=AssistantResponse)
+def page_assistant(
+    request: AssistantRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+) -> AssistantResponse:
+    """The small chat on the Skills, Goals, Career and Projects pages: it can change their data."""
+    try:
+        return run_page_assistant(db, user_id, request)
+    except LLMError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 # A plain `def` so the database read runs in a worker thread; the reply itself

@@ -53,10 +53,10 @@ function MentorHome({ lastConversation, onNewChat, onOpen, onSuggestion }) {
           <BotAvatar size={128} float sparkles />
         </div>
 
-        <h1 className="display-6 fw-bold mb-2">
+        <h1 className="h3 fw-bold mb-2">
           Hi{name && ` ${name}`}, I'm <span className="text-gradient">Mentora</span>
         </h1>
-        <p className="lead text-body-secondary mb-4">
+        <p className="text-body-secondary mb-4">
           Your personal AI mentor. I'm here to help you{" "}
           <span key={tagline} className="tagline fw-semibold text-body">
             {TAGLINES[tagline]}.
@@ -64,14 +64,14 @@ function MentorHome({ lastConversation, onNewChat, onOpen, onSuggestion }) {
         </p>
 
         <div className="d-flex flex-wrap justify-content-center gap-2 mb-5">
-          <button type="button" className="btn btn-gradient btn-lg px-4" onClick={onNewChat}>
+          <button type="button" className="btn btn-gradient px-4" onClick={onNewChat}>
             <i className="bi bi-chat-heart me-2" aria-hidden="true" />
             Start a new chat
           </button>
           {lastConversation && (
             <button
               type="button"
-              className="btn btn-outline-secondary btn-lg px-4 text-truncate continue-btn"
+              className="btn btn-outline-secondary px-4 text-truncate continue-btn"
               onClick={() => onOpen(lastConversation.id)}
               title={lastConversation.title}
             >

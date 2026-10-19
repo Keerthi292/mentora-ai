@@ -9,8 +9,14 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
-    # Reads DATABASE_URL from the environment or from backend/.env
-    database_url: str = "postgresql+psycopg2://mentora:mentora_dev@localhost:5432/mentora"
+    # Private addresses and passwords live only in backend/.env (see .env.example), never in code.
+    # DATABASE_URL, e.g. postgresql+psycopg2://USER:PASSWORD@HOST:5432/DATABASE
+    database_url: str
+    # Where the backend runs (backend/main.py)
+    API_HOST: str
+    API_PORT: int
+    # Frontend addresses allowed to call the API, comma-separated
+    CORS_ORIGINS: str
 
     # No authentication yet: every request acts as this one demo user.
     # Override with DEMO_USER_ID=... in backend/.env
@@ -31,6 +37,10 @@ class Settings(BaseSettings):
     # Uploaded files (chat attachments, project images) are saved here. Not in Git.
     UPLOAD_DIR: Path = BACKEND_DIR / "uploads"
     MAX_UPLOAD_MB: int = Field(20, ge=1)
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
     # Absolute path, so backend/.env is found whatever folder the app starts from
     model_config = SettingsConfigDict(

@@ -6,6 +6,7 @@ import EmptyState from "../components/EmptyState";
 import FilterPills from "../components/FilterPills";
 import FormModal from "../components/FormModal";
 import Modal from "../components/Modal";
+import PageAssistant from "../components/PageAssistant";
 import ProgressRing from "../components/ProgressRing";
 import StatusBadge, { statusOptions } from "../components/StatusBadge";
 import useResource from "../hooks/useResource";
@@ -117,6 +118,8 @@ function LearningGoals() {
           }}
         />
       )}
+
+      <PageAssistant page="goals" onChanged={reload} />
     </>
   );
 }

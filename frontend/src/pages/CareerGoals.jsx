@@ -5,6 +5,7 @@ import CardMenu from "../components/CardMenu";
 import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
 import EmptyState from "../components/EmptyState";
 import FormModal from "../components/FormModal";
+import PageAssistant from "../components/PageAssistant";
 import ProgressRing from "../components/ProgressRing";
 import useResource from "../hooks/useResource";
 import { splitList } from "../utils/format";
@@ -133,6 +134,14 @@ function CareerGoals() {
           onClose={() => setDeleting(null)}
         />
       )}
+
+      <PageAssistant
+        page="career"
+        onChanged={() => {
+          careers.reload();
+          skills.reload();
+        }}
+      />
     </>
   );
 }

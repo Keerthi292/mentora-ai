@@ -1,7 +1,11 @@
 // Small wrapper around fetch() for calling the Mentora AI backend.
 // There is no login yet, so no token or auth headers are sent.
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8002";
+// The backend's address comes only from frontend/.env (see frontend/.env.example)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+if (!API_BASE_URL) {
+  console.error("VITE_API_BASE_URL is missing: add it to frontend/.env (see frontend/.env.example), then restart npm run dev.");
+}
 
 /**
  * Call the backend and return the parsed JSON response.

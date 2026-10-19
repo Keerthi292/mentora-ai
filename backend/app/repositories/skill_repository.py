@@ -21,6 +21,11 @@ def get_skill_by_name(db: Session, name: str) -> Skill | None:
     return db.scalars(stmt).first()
 
 
+def lowercase_names(db: Session) -> set[str]:
+    """Every skill name in the catalog, lowercased (for quick "already saved?" checks)."""
+    return set(db.scalars(select(func.lower(Skill.name))))
+
+
 def create_skill(db: Session, data: dict) -> Skill:
     skill = Skill(**data)
     db.add(skill)

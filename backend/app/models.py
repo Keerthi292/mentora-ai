@@ -7,6 +7,8 @@ are easy to read and change without database enum migrations.
 from datetime import date, datetime
 
 from sqlalchemy import (
+    JSON,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -36,6 +38,11 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # "dark" or "light"
+    theme: Mapped[str] = mapped_column(String(10), default="dark", server_default="dark")
+    # The dashboard's tip of the day, so Gemini is asked once a day, not on every visit
+    daily_tip: Mapped[str | None] = mapped_column(Text)
+    daily_tip_date: Mapped[date | None] = mapped_column(Date)
 
     # Deleting a user deletes everything that belongs to them
     learning_goals: Mapped[list["LearningGoal"]] = relationship(
@@ -220,3 +227,61 @@ class Upload(Base):
     @property
     def url(self) -> str:
         return f"/api/uploads/{self.id}"
+
+
+# ---------------------------------------------------------------------------
+# Mentor chats
+# ---------------------------------------------------------------------------
+
+
+class Conversation(Base):
+    """One chat with the mentor, as shown in the chat list."""
+
+    __tablename__ = "conversations"
+
+    # Made by the browser (a UUID) when the chat starts, so it can be saved later
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    # When the last message was sent (the chat list is sorted by this)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    messages: Mapped[list["ChatMessage"]] = relationship(
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ChatMessage.position",
+    )
+
+
+class ChatMessage(Base):
+    """One message in a conversation: from the user or the mentor."""
+
+    __tablename__ = "chat_messages"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "position", name="uq_chat_messages_conversation_id_position"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
+    position: Mapped[int] = mapped_column(Integer)  # 0, 1, 2... in the conversation
+    client_id: Mapped[str] = mapped_column(String(64))  # the browser's id for the message
+    role: Mapped[str] = mapped_column(String(20))  # "user" or "assistant"
+    content: Mapped[str] = mapped_column(Text, default="")
+    # Attached files: [{id, filename, content_type, size, url}]
+    attachments: Mapped[list] = mapped_column(JSON, default=list)
+    # A reply that failed (the error shown) or was stopped by the user
+    error: Mapped[str | None] = mapped_column(Text)
+    stopped: Mapped[bool] = mapped_column(Boolean, default=False)
+    edited: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    conversation: Mapped["Conversation"] = relationship(back_populates="messages")

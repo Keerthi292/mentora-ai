@@ -44,12 +44,12 @@ mentora-ai/
 │       ├── main.py             # FastAPI app, routers, CORS, startup (seed + MCP)
 │       ├── config.py           # Settings from .env
 │       ├── database.py         # Engine, sessions, get_db()
-│       ├── models.py           # SQLAlchemy models (8 tables)
+│       ├── models.py           # SQLAlchemy models (10 tables)
 │       ├── schemas.py          # Pydantic Create / Update / Response schemas
 │       ├── dependencies.py     # get_current_user_id() -> demo user
 │       ├── seed.py             # Creates the demo user
 │       ├── mcp_server.py       # MCP server (tools: ask_mentor, ping)
-│       ├── ai/                 # Mentor: Gemini client, prompts, user profile, attachments
+│       ├── ai/                 # Mentor: Gemini client, prompts, user profile, attachments, resume reading
 │       ├── routers/            # HTTP endpoints
 │       ├── services/           # Business rules (404 / 409 checks, ownership)
 │       └── repositories/       # Database queries
@@ -63,10 +63,11 @@ mentora-ai/
         ├── layouts/            # MainLayout (navbar)
         ├── pages/              # Dashboard, Skills, LearningGoals, CareerGoals, Projects,
         │                       # ProjectDetail, MentorChat
-        ├── components/         # BotAvatar, ProgressRing, RichEditor, FormModal, Modal, ...
+        ├── components/         # BotAvatar, ProgressRing, RichEditor, FormModal, Modal,
+        │                       # ResumeImportModal, ...
         │   └── mentor/         # Chat: MentorHome, ChatSidebar, ChatMessage, Composer
-        ├── hooks/              # useResource (load / create / update / delete)
-        ├── services/           # api.js, mentorChat.js, sse.js, uploads.js, chatStorage.js
+        ├── hooks/              # useResource (load / create / update / delete), useMe (name, theme)
+        ├── services/           # api.js, mentorChat.js, sse.js, uploads.js, chats.js
         └── utils/              # format.js
 ```
 
@@ -149,6 +150,8 @@ uv run main.py          # http://127.0.0.1:8002, restarts when app/ changes
 ```
 
 On startup the demo user (`Demo User`, `demo@mentora.local`) is created automatically.
+Change the name with the ✏️ next to the Dashboard greeting (or `PATCH /api/me`); the app
+and the mentor then greet you by it.
 
 - API docs (Swagger): http://127.0.0.1:8002/docs
 - MCP endpoint: http://127.0.0.1:8002/mcp
@@ -180,11 +183,11 @@ Open http://localhost:5173 (the backend's CORS only allows port 5173).
 
 | Page | URL | What it does |
 |---|---|---|
-| Dashboard | `/` | Greeting, counts per page, learning-goal progress bars, AI tip of the day |
-| Skills | `/skills` | Table: add, edit, delete skills |
+| Dashboard | `/` | Greeting by name, counts per page, learning-goal progress bars, AI tip of the day |
+| Skills | `/skills` | Table: add, edit, delete skills; **Import from resume** |
 | Learning Goals | `/goals` | Cards with a progress ring; **Update progress** (slider, note, history, mark completed) |
 | Career Goals | `/career` | Target roles with needed skills; readiness ring; add/remove skills in place; ask for a roadmap |
-| Projects | `/projects` | Cards (cover image from the write-up); `/projects/:id` has a rich-text write-up with images |
+| Projects | `/projects` | Cards (cover image from the write-up); **Import from resume**; `/projects/:id` has a rich-text write-up with images |
 | AI Mentor | `/mentor` | ChatGPT-style chat: streaming replies, chat list, rename, edit messages, file uploads |
 
 The whole app is dark by default (sun/moon button in the navbar for light), and works on phones.
@@ -202,7 +205,10 @@ Another user's data always returns **404**.
 | User skills | `GET/POST /api/user-skills`, `GET/PATCH/DELETE /api/user-skills/{id}` |
 | Career goals | `GET/POST /api/career-goals`, `GET/PATCH/DELETE /api/career-goals/{id}` |
 | Projects | `GET/POST /api/projects`, `GET/PATCH/DELETE /api/projects/{id}` |
-| AI chat | `POST /api/ai/chat`, `POST /api/ai/chat/stream` (Server-Sent Events), `GET /api/ai/tip` |
+| Current user | `GET/PATCH /api/me` (name, theme) |
+| AI chat | `POST /api/ai/chat`, `POST /api/ai/chat/stream` (Server-Sent Events), `GET /api/ai/tip` (saved for the day; `?refresh=true` for a new one) |
+| Mentor chats | `GET /api/conversations`, `GET/PUT/PATCH/DELETE /api/conversations/{id}` (`PUT` saves the whole chat) |
+| Resume import | `POST /api/resume/parse` (`{upload_id}` → skills and projects found; saves nothing), `POST /api/resume/import` (saves the ones you picked) |
 | Dashboard | `GET /api/dashboard` (counts per page + learning-goal progress) |
 | Uploads | `POST /api/uploads` (multipart), `GET` / `DELETE /api/uploads/{id}`: images, PDFs, text/code, max `MAX_UPLOAD_MB` |
 | MCP | `/mcp` (Streamable HTTP; tools `ask_mentor`, `ping`) |
@@ -222,19 +228,21 @@ Allowed status values:
 
 ### Database tables
 
-`users`, `skills`, `user_skills`, `learning_goals`, `learning_progress`,
+`users` (incl. `theme` and today's tip), `skills`, `user_skills`, `learning_goals`, `learning_progress`,
 `career_goals` (incl. `required_skills`), `projects` (incl. `content`, the write-up HTML),
-`uploads` (file details; the files are in `backend/uploads/`). Deleting a user (or a goal or
+`uploads` (file details; the files are in `backend/uploads/`), `conversations` and
+`chat_messages` (mentor chats). Deleting a user (or a goal or
 skill) also deletes everything that belongs to it (`ON DELETE CASCADE`).
 
 ### Where the data is stored
 
 | Where | What |
 |---|---|
-| PostgreSQL in Docker (`mentora-postgres`, volume `mentora_pgdata`) | Skills, goals, progress, career goals, projects, upload details |
+| PostgreSQL in Docker (`mentora-postgres`, volume `mentora_pgdata`) | Everything: your name and theme, skills, goals, progress, career goals, projects, mentor chats, today's tip, upload details |
 | `backend/uploads/` (git-ignored) | The uploaded files themselves (chat attachments, project images) |
-| Browser localStorage | Mentor chats (`mentora.conversations.v1`), today's tip, theme. Per browser. |
 | `backend/.env` (git-ignored) | Database URL, Gemini API key and model |
+
+Nothing is kept in the browser (no localStorage).
 
 Sent to Google Gemini for each reply: your message, the recent chat history with its files,
 and a text summary of your profile (skills, goals, career roles, projects).
@@ -257,14 +265,14 @@ database can't be read, the mentor still answers, just without your profile.
 **The Mentor page** opens on a landing screen (animated robot, quick-start ideas); **Start a
 new chat** or a suggestion card opens the chat. Replies render as Markdown with a copy button,
 and the robot jitters while it thinks. The whole app is dark by default; the sun/moon button
-in the navbar switches to light (remembered per browser).
+in the navbar switches to light (saved in the database).
 
 **It remembers the conversation.** The chat page works like ChatGPT: a list of your
 chats on the left (grouped Today / Yesterday / ...), **+ New chat**, and a delete button
 per chat. Each new message is sent with the earlier messages of that chat, so follow-ups
 like "explain the second point" work. Only the newest `CHAT_HISTORY_LIMIT` messages
-(default 20) are sent to Gemini. Chats are saved in your browser (localStorage), not in
-the database: they survive a reload but aren't shared across browsers or devices.
+(default 20) are sent to Gemini. Chats are saved in the database when each reply finishes,
+so they are the same in every browser and on every device.
 
 **Edit and rename.** Hover over a message you sent and click **Edit**: the replies after it are
 replaced and the mentor answers the edited text. The ✏️ next to a chat in the sidebar renames it.
@@ -274,6 +282,15 @@ uploads images (PNG, JPEG, WebP, GIF) or files (PDF, code, text, CSV, JSON); you
 or paste them. Up to 5 per message, `MAX_UPLOAD_MB` (20) each. Gemini reads them, and still sees
 them in follow-up questions. The file type is checked from the content, not the name, and SVG,
 Word and video files are rejected.
+
+**It greets you by name.** Your name (from `GET /api/me`) is in the profile, and the mentor is
+told to use your first name when greeting you, not in every message.
+
+**Import from resume.** On the Skills or Projects page, **Import from resume** takes a PDF,
+image (PNG, JPEG, WebP) or text file. Gemini reads it (JSON mode) and lists the skills, with a
+level, and the projects, with technologies and bullet points. You tick what to keep: skills are
+added to the catalog with their level, and projects are saved as completed with the bullet points
+as their write-up. Anything already saved is skipped, and the uploaded file is deleted after reading.
 
 **Get an API key**
 
@@ -318,8 +335,8 @@ docker start mentora-postgres   # if it's not running
 uv run pytest                   # add -v for each test name
 ```
 
-Current result: **130 passed** (AI chat, attachments, retries, dashboard, uploads, skills,
-learning goals, demo user).
+Current result: **178 passed** (AI chat, attachments, retries, dashboard, uploads, skills,
+learning goals, demo user, current user, mentor chats, resume import).
 Gemini is replaced by a fake in tests, so they need no API key and use no quota.
 
 ---
@@ -340,6 +357,5 @@ Gemini is replaced by a fake in tests, so they need no API key and use no quota.
 ## Not built yet
 
 - Authentication (the app uses one demo user on purpose for now)
-- Chat history saved on the server (it's per browser for now)
 - UI for skill levels (`user_skills`: proficiency per skill; the API exists)
 - Automated frontend tests; dedicated backend tests for career goals and projects CRUD

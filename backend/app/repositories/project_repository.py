@@ -1,6 +1,6 @@
 """Database access for projects. No HTTP or business rules here, only queries."""
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Project
@@ -20,6 +20,11 @@ def get_project(db: Session, project_id: int, user_id: int) -> Project | None:
     # Filter by user_id too, so users can only see their own projects
     stmt = select(Project).where(Project.id == project_id, Project.user_id == user_id)
     return db.scalars(stmt).first()
+
+
+def lowercase_names(db: Session, user_id: int) -> set[str]:
+    """The user's project names, lowercased (for quick "already saved?" checks)."""
+    return set(db.scalars(select(func.lower(Project.name)).where(Project.user_id == user_id)))
 
 
 def create_project(db: Session, user_id: int, data: dict) -> Project:

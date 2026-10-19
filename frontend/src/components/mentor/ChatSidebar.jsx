@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import BotAvatar from "../BotAvatar";
-import { dateGroup } from "../../services/chatStorage";
+import { dateGroup } from "../../services/chats";
 
 // Bootstrap closes the slide-in panel (small screens) when these buttons are clicked
 const closePanel = { "data-bs-dismiss": "offcanvas", "data-bs-target": "#chatHistory" };

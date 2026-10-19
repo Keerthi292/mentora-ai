@@ -419,6 +419,37 @@ def test_tip_returns_a_personal_tip(client, fake_gemini, profile_data):
     assert "tip" in _turns(fake_gemini.calls[0])[0][1]
 
 
+def test_tip_is_saved_for_the_day(client, fake_gemini, demo_user, db):
+    fake_gemini.reply = "First tip"
+    assert client.get("/api/ai/tip").json() == {"tip": "First tip"}
+
+    fake_gemini.reply = "Second tip"
+    # Same day: the saved tip, Gemini isn't asked again
+    assert client.get("/api/ai/tip").json() == {"tip": "First tip"}
+    assert len(fake_gemini.calls) == 1
+    assert demo_user.daily_tip == "First tip"
+
+
+def test_tip_refresh_asks_for_a_new_one(client, fake_gemini, demo_user):
+    fake_gemini.reply = "First tip"
+    client.get("/api/ai/tip")
+    fake_gemini.reply = "Second tip"
+
+    assert client.get("/api/ai/tip?refresh=true").json() == {"tip": "Second tip"}
+    assert client.get("/api/ai/tip").json() == {"tip": "Second tip"}
+
+
+def test_tip_from_an_earlier_day_is_replaced(client, fake_gemini, demo_user, db):
+    from datetime import date, timedelta
+
+    demo_user.daily_tip = "Old tip"
+    demo_user.daily_tip_date = date.today() - timedelta(days=1)
+    db.commit()
+    fake_gemini.reply = "Fresh tip"
+
+    assert client.get("/api/ai/tip").json() == {"tip": "Fresh tip"}
+
+
 def test_tip_without_api_key_returns_503(client, monkeypatch):
     monkeypatch.setattr(settings, "GEMINI_API_KEY", None)
 

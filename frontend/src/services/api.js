@@ -1,10 +1,19 @@
 // Small wrapper around fetch() for calling the Mentora AI backend.
-// There is no login yet, so no token or auth headers are sent.
+//
+// Requests go to /api on this same site; Vite forwards them to the backend
+// (BACKEND_URL in frontend/.env). So the login cookie (httpOnly, set by the
+// backend) is sent automatically, and no token is ever handled in JavaScript.
+const API_BASE_URL = "";
 
-// The backend's address comes only from frontend/.env (see frontend/.env.example)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-if (!API_BASE_URL) {
-  console.error("VITE_API_BASE_URL is missing: add it to frontend/.env (see frontend/.env.example), then restart npm run dev.");
+// Called when the backend says we're not logged in (401), e.g. the session expired
+let onUnauthorized = () => {};
+export function setUnauthorizedHandler(handler) {
+  onUnauthorized = handler;
+}
+
+/** Report a 401 from any request (fetch, upload, stream) so the app shows the login page. */
+export function checkUnauthorized(status, path) {
+  if (status === 401 && !path.startsWith("/api/auth/")) onUnauthorized();
 }
 
 /**
@@ -26,14 +35,17 @@ export async function apiRequest(path, { method = "GET", body } = {}) {
     response = await fetch(`${API_BASE_URL}${path}`, options);
   } catch {
     // fetch only throws when the server can't be reached at all
-    throw new Error(`Cannot reach the backend at ${API_BASE_URL}. Is it running?`);
+    throw new Error("Cannot reach the backend. Is it running?");
   }
 
   // 204 No Content (e.g. after DELETE) has no body to parse
   const data = response.status === 204 ? null : await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(getErrorMessage(data, response.status));
+    checkUnauthorized(response.status, path);
+    const error = new Error(getErrorMessage(data, response.status));
+    error.status = response.status;
+    throw error;
   }
   return data;
 }

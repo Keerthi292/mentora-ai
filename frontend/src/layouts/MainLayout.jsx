@@ -41,6 +41,7 @@ function useTheme() {
 
 function MainLayout() {
   const [theme, toggleTheme] = useTheme();
+  const { me, name, logout } = useMe();
   // The menu on small screens (hamburger button). Controlled by React rather than
   // Bootstrap's JS, so it closes when a link is tapped or the page changes.
   const [menuOpen, setMenuOpen] = useState(false);
@@ -80,6 +81,17 @@ function MainLayout() {
               title={theme === "dark" ? "Light theme" : "Dark theme"}
             >
               <i className={`bi ${theme === "dark" ? "bi-sun" : "bi-moon-stars"}`} />
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 logout-btn"
+              onClick={logout}
+              title={`Log out (${me?.email ?? ""})`}
+            >
+              <i className="bi bi-box-arrow-right" aria-hidden="true" />
+              <span className="d-none d-xl-inline">{name ? `Log out ${name}` : "Log out"}</span>
+              <span className="visually-hidden d-xl-none">Log out</span>
             </button>
 
             {/* Hamburger button on small screens */}

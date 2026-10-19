@@ -1417,3 +1417,17 @@ body {
 .chat-page .form-control {
   font-size: inherit;
 }
+
+/* Log in / sign up */
+.auth-page {
+  min-height: 100vh;
+}
+
+.auth-card {
+  max-width: 420px;
+}
+
+.logout-btn {
+  border-radius: 999px;
+  white-space: nowrap;
+}

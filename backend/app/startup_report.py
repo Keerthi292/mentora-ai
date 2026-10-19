@@ -68,12 +68,37 @@ def _migrations(engine: Engine) -> str:
     return f"up to date ({head})"
 
 
-def _user(engine: Engine) -> str:
+def _plural(count: int, word: str) -> str:
+    return f"{count} {word}{'' if count == 1 else 's'}"
+
+
+def _users(engine: Engine) -> str:
     with Session(engine) as db:
-        user = db.get(User, settings.DEMO_USER_ID)
-    if user is None:
-        raise RuntimeError(f"user {settings.DEMO_USER_ID} not found. Run: uv run python -m app.seed")
-    return f'"{user.full_name}" (id {user.id})'
+        total = db.scalar(select(func.count()).select_from(User))
+        with_login = db.scalar(select(func.count()).select_from(User).where(User.password_hash.is_not(None)))
+    if with_login == 0:
+        hint = "Sign up in the app" + (", or give an existing account a login: uv run python -m app.manage set-login" if total else "")
+        raise RuntimeError(f"{_plural(total, 'account')}, none can log in yet. {hint}")
+    return f"{_plural(total, 'account')}, {with_login} can log in"
+
+
+def _mcp(engine: Engine, tools: list[str]) -> str:
+    if not tools:
+        raise RuntimeError("no MCP tools registered")
+    if not (settings.MCP_TOKEN and settings.MCP_TOKEN.get_secret_value().strip()):
+        raise RuntimeError("MCP_TOKEN is not set in backend/.env: /mcp refuses every request")
+    if settings.MCP_USER_ID is None:
+        raise RuntimeError("MCP_USER_ID is not set in backend/.env: ask_mentor doesn't know whose data to use")
+    try:
+        with Session(engine) as db:
+            user = db.get(User, settings.MCP_USER_ID)
+    except Exception:
+        acts_as = f"user {settings.MCP_USER_ID} (not checked: no database)"
+    else:
+        if user is None:
+            raise RuntimeError(f"MCP_USER_ID={settings.MCP_USER_ID} doesn't exist")
+        acts_as = f'"{user.full_name}"'
+    return f"/mcp (Bearer token), acts as {acts_as}, tools: {', '.join(tools)}"
 
 
 def _data(engine: Engine) -> str:
@@ -102,12 +127,6 @@ def _uploads() -> str:
     return f"{folder} ({files} files, max {settings.MAX_UPLOAD_MB} MB each)"
 
 
-def _mcp(tools: list[str]) -> str:
-    if not tools:
-        raise RuntimeError("no MCP tools registered")
-    return f"/mcp, tools: {', '.join(tools)}"
-
-
 def _line(label: str, check: Callable[[], str]) -> bool:
     try:
         logger.info("%s %-11s %s", OK, label, check())
@@ -124,7 +143,7 @@ def print_startup_report(engine: Engine, mcp_tools: list[str]) -> bool:
     if results[0]:
         results += [
             _line("Migrations", lambda: _migrations(engine)),
-            _line("User", lambda: _user(engine)),
+            _line("Users", lambda: _users(engine)),
             _line("Data", lambda: _data(engine)),
         ]
     else:
@@ -132,7 +151,7 @@ def print_startup_report(engine: Engine, mcp_tools: list[str]) -> bool:
     results += [
         _line("Gemini", _gemini),
         _line("Uploads", _uploads),
-        _line("MCP", lambda: _mcp(mcp_tools)),
+        _line("MCP", lambda: _mcp(engine, mcp_tools)),
     ]
     ok = all(results)
     logger.info("── %s · API docs at /docs " + "─" * 22, "All systems ready" if ok else "Started with problems (see ✗ above)")

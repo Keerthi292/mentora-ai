@@ -105,8 +105,8 @@ class Tool:
 # --- Skills ---------------------------------------------------------------------
 
 
-def _find_skill(db: Session, name: str):
-    skill = skill_repository.get_skill_by_name(db, name.strip())
+def _find_skill(db: Session, user_id: int, name: str):
+    skill = skill_repository.get_skill_by_name(db, name.strip(), user_id)
     if skill is None:
         raise HTTPException(404, f"No skill named '{name}' on the Skills page")
     return skill
@@ -116,12 +116,12 @@ def _set_skill(db: Session, user_id: int, args: dict) -> tuple[dict, str]:
     name = str(args["name"]).strip()
     # Check the level first, so a bad value doesn't leave a half-made skill behind
     level = UserSkillUpdate(**{k: args[k] for k in ("proficiency", "status") if args.get(k)})
-    skill = skill_repository.get_skill_by_name(db, name)
+    skill = skill_repository.get_skill_by_name(db, name, user_id)
     created = skill is None
     if created:
-        skill = skill_service.create_skill(db, SkillCreate(name=name, category=args.get("category")))
+        skill = skill_service.create_skill(db, user_id, SkillCreate(name=name, category=args.get("category")))
     elif args.get("category"):
-        skill = skill_service.update_skill(db, skill.id, SkillUpdate(category=args["category"]))
+        skill = skill_service.update_skill(db, skill.id, user_id, SkillUpdate(category=args["category"]))
 
     changes = level.model_dump(exclude_unset=True)
     current = user_skill_repository.get_by_user_and_skill(db, user_id, skill.id)
@@ -138,14 +138,14 @@ def _set_skill(db: Session, user_id: int, args: dict) -> tuple[dict, str]:
 
 
 def _rename_skill(db: Session, user_id: int, args: dict) -> tuple[dict, str]:
-    skill = _find_skill(db, args["name"])
+    skill = _find_skill(db, user_id, args["name"])
     old = skill.name
-    skill = skill_service.update_skill(db, skill.id, SkillUpdate(name=args["new_name"]))
+    skill = skill_service.update_skill(db, skill.id, user_id, SkillUpdate(name=args["new_name"]))
     return {"name": skill.name}, f"Renamed {old} to {skill.name}"
 
 
 def _clear_skill_level(db: Session, user_id: int, args: dict) -> tuple[dict, str]:
-    skill = _find_skill(db, args["name"])
+    skill = _find_skill(db, user_id, args["name"])
     current = user_skill_repository.get_by_user_and_skill(db, user_id, skill.id)
     if current:
         user_skill_service.delete_user_skill(db, current.id, user_id)
@@ -153,15 +153,15 @@ def _clear_skill_level(db: Session, user_id: int, args: dict) -> tuple[dict, str
 
 
 def _delete_skill(db: Session, user_id: int, args: dict) -> tuple[dict, str]:
-    skill = _find_skill(db, args["name"])
-    skill_service.delete_skill(db, skill.id)
+    skill = _find_skill(db, user_id, args["name"])
+    skill_service.delete_skill(db, skill.id, user_id)
     return {"deleted": skill.name}, f"Deleted {skill.name}"
 
 
 def _skills_data(db: Session, user_id: int) -> str:
     levels = {us.skill_id: us for us in user_skill_repository.list_user_skills(db, user_id, limit=MAX_LISTED)}
     lines = []
-    for skill in skill_repository.list_skills(db, limit=MAX_LISTED):
+    for skill in skill_repository.list_skills(db, user_id, limit=MAX_LISTED):
         level = levels.get(skill.id)
         parts = [skill.category or "no category"]
         parts.append(f"{level.proficiency}, {level.status}" if level else "level not set")

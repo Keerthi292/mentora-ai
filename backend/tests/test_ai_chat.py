@@ -245,8 +245,8 @@ def profile_data(db, demo_user, make_user):
 
     from app.models import CareerGoal, LearningGoal, LearningProgress, Project, Skill, UserSkill
 
-    python = Skill(name="Python", category="Programming")
-    db.add_all([python, Skill(name="SQL")])
+    python = Skill(user_id=1, name="Python", category="Programming")
+    db.add_all([python, Skill(user_id=1, name="SQL")])
     db.flush()
     goal = LearningGoal(
         user_id=demo_user.id, title="Learn FastAPI", status="active", target_date=date(2026, 12, 1)

@@ -35,6 +35,30 @@ class InputSchema(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Sign up / log in
+# ---------------------------------------------------------------------------
+
+# Simple check (something@something.something); stored lowercase
+Email = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, to_lower=True, max_length=255, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$"),
+]
+# Not trimmed: spaces are part of a password
+Password = Annotated[str, StringConstraints(min_length=8, max_length=128)]
+
+
+class RegisterRequest(InputSchema):
+    full_name: str = Field(min_length=1, max_length=255)
+    email: Email
+    password: Password
+
+
+class LoginRequest(BaseModel):
+    email: Email
+    password: str = Field(min_length=1, max_length=128)
+
+
+# ---------------------------------------------------------------------------
 # The current user (GET / PATCH /api/me)
 # ---------------------------------------------------------------------------
 

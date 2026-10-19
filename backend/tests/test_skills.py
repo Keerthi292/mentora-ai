@@ -1,6 +1,10 @@
-"""Tests for the /api/skills CRUD endpoints."""
+"""Tests for the /api/skills CRUD endpoints. Skills belong to the logged-in user."""
 
 import pytest
+
+from app.models import Skill
+
+pytestmark = pytest.mark.usefixtures("demo_user")
 
 
 def create_skill(client, name="Python", category="Programming"):
@@ -123,3 +127,30 @@ def test_delete_skill(client):
 
 def test_delete_missing_skill_returns_404(client):
     assert client.delete("/api/skills/999999").status_code == 404
+
+
+# ---- Each user has their own skills -------------------------------------------
+
+
+def test_other_users_skills_are_hidden_and_protected(client, db, make_user):
+    theirs = Skill(user_id=make_user().id, name="Rust")
+    db.add(theirs)
+    db.commit()
+
+    assert client.get("/api/skills").json() == []
+    assert client.get(f"/api/skills/{theirs.id}").status_code == 404
+    assert client.patch(f"/api/skills/{theirs.id}", json={"name": "Mine"}).status_code == 404
+    assert client.delete(f"/api/skills/{theirs.id}").status_code == 404
+    # The same name is fine for a different user
+    assert client.post("/api/skills", json={"name": "Rust"}).status_code == 201
+    assert db.get(Skill, theirs.id).name == "Rust"
+
+
+def test_cannot_set_a_level_on_another_users_skill(client, db, make_user):
+    theirs = Skill(user_id=make_user().id, name="Go")
+    db.add(theirs)
+    db.commit()
+
+    response = client.post("/api/user-skills", json={"skill_id": theirs.id})
+
+    assert response.status_code == 404

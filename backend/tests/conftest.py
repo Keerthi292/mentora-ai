@@ -19,9 +19,9 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import Base, get_db
+from app.dependencies import get_current_user_id
 from app.main import app
 from app.models import User
-from app.seed import seed_demo_user
 
 # Same server and credentials as the dev database, but a different database name
 _dev_url = make_url(settings.database_url)
@@ -102,25 +102,40 @@ def db(engine):
     connection.close()
 
 
+# The user `client` acts as (see the demo_user fixture)
+DEMO_USER_ID = 1
+
+
 @pytest.fixture
-def client(db):
-    """A TestClient whose requests use the test session instead of the real DB."""
+def anon_client(db):
+    """A TestClient that uses the test session and is NOT logged in (real login rules)."""
 
     def override_get_db():
         yield db
 
     app.dependency_overrides[get_db] = override_get_db
-    # Not used as `with TestClient(app)`, so the MCP lifespan doesn't start;
-    # these tests don't call /mcp.
+    # Not used as `with TestClient(app)`, so the MCP lifespan doesn't start
     yield TestClient(app)
     app.dependency_overrides.clear()
 
 
 @pytest.fixture
+def client(anon_client):
+    """A TestClient logged in as the demo user (id 1), so the feature tests don't
+    each need to log in. Login itself is tested with `anon_client` in test_auth.py."""
+    app.dependency_overrides[get_current_user_id] = lambda: DEMO_USER_ID
+    return anon_client
+
+
+@pytest.fixture
 def demo_user(db) -> User:
-    """The demo user every request acts as (same seed the app runs on startup)."""
-    seed_demo_user(db)
-    return db.get(User, settings.DEMO_USER_ID)
+    """The user `client` acts as: id 1, "Demo User"."""
+    user = User(id=DEMO_USER_ID, email="demo@mentora.local", full_name="Demo User")
+    db.add(user)
+    db.commit()
+    # The id was chosen by hand, so move PostgreSQL's id counter past it
+    db.execute(text("SELECT setval(pg_get_serial_sequence('users', 'id'), (SELECT max(id) FROM users))"))
+    return user
 
 
 @pytest.fixture

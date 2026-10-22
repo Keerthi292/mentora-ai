@@ -53,6 +53,7 @@ mentora-ai/
 └── frontend/
     ├── package.json
     ├── vite.config.js
+    ├── vercel.json             # Deployed: forwards /api to the backend on Render
     └── src/
         ├── App.jsx             # Routes
         ├── main.jsx
@@ -271,6 +272,10 @@ npm run dev
 ```
 
 Open http://localhost:5173 (the backend's CORS only allows port 5173).
+
+**Deployed** (Vercel, project root `frontend`): there is no dev server, so `frontend/vercel.json`
+rewrites `/api/*` to the backend on Render (same site for the browser, so the login cookie still
+works) and every other path to `index.html`. Change the backend URL there if it moves.
 
 ---
 

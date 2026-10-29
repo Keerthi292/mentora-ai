@@ -1,9 +1,40 @@
 # Mentora AI
 
-AI-powered Personal Learning and Career Intelligence Companion.
+AI-powered personal learning and career companion. Track your skills, learning goals,
+career goals and projects, and chat with an AI mentor that knows all of them.
 
-Mentora AI helps you track the skills you're learning, your learning goals and
-progress, your career goals and your projects, and gives you an AI mentor to chat with.
+## Contents
+
+- [Features](#features)
+- [Tech stack](#tech-stack)
+- [Getting started](#getting-started)
+- [Configuration](#configuration)
+- [Deployment](#deployment)
+- [How it works](#how-it-works)
+- [API reference](#api-reference)
+- [AI mentor](#ai-mentor)
+- [Development](#development)
+- [Roadmap](#roadmap)
+
+---
+
+## Features
+
+| Page | URL | What it does |
+|---|---|---|
+| Dashboard | `/` | Greeting by name, counts per page, learning-goal progress, AI tip of the day |
+| Skills | `/skills` | Level and status per skill (edit in place), filters, **Import from resume** |
+| Learning Goals | `/goals` | Progress rings; log progress with a slider, note and history |
+| Career Goals | `/career` | Target roles with required skills, readiness ring, AI roadmap |
+| Projects | `/projects` | Cards with cover images, **Import from resume**, rich-text write-ups at `/projects/:id` |
+| AI Mentor | `/mentor` | ChatGPT-style chat: streaming replies, chat history, rename, edit messages, file uploads |
+
+- **Page assistant:** a floating bot on Skills, Goals, Career and Projects changes that page's
+  data from plain-language requests ("set Docker to advanced", "I'm 60% done with my RAG goal").
+  It asks before deleting anything.
+- **Accounts:** email + password sign-up; each account sees only its own data.
+- **Dark theme** by default (light toggle in the navbar), responsive on phones.
+- **MCP server** at `/mcp` so external AI clients can ask the mentor (optional).
 
 ---
 
@@ -11,84 +42,126 @@ progress, your career goals and your projects, and gives you an AI mentor to cha
 
 | Part | Technologies |
 |---|---|
-| Frontend | React 19 + Vite 8, JavaScript/JSX, Bootstrap 5 (dark theme) + Bootstrap Icons, React Router 7, react-markdown, TipTap (rich-text editor) |
-| Backend | Python, FastAPI, Pydantic, SQLAlchemy 2.x, Alembic |
-| Database | PostgreSQL 16 (runs in Docker for local development) |
-| AI | Google Gemini (`google-genai` SDK): streaming (SSE), file attachments, automatic retries; MCP server for AI tools |
-| Tests | pytest + httpx (backend); Playwright browser checks during development |
+| Frontend | React 19, Vite 8, React Router 7, Bootstrap 5 + Bootstrap Icons, react-markdown, TipTap |
+| Backend | Python 3.12+, FastAPI, Pydantic, SQLAlchemy 2, Alembic |
+| Database | PostgreSQL 16 (Docker locally) |
+| AI | Google Gemini (`google-genai`): SSE streaming, file attachments, retries, tool calling; MCP server |
+| Tests | pytest + httpx |
+| Hosting | Vercel (frontend), Render (backend) |
 
 ---
 
-## Project structure
+## Getting started
 
-```
-mentora-ai/
-├── README.md
-├── backend/
-│   ├── .env                    # DATABASE_URL, GEMINI_API_KEY, ... (not committed)
-│   ├── .env.example            # Template for .env
-│   ├── pyproject.toml          # Dependencies + pytest settings (uv)
-│   ├── uv.lock                 # Exact dependency versions
-│   ├── requirements.txt        # Same packages, for pip
-│   ├── main.py                 # Dev entry point: uv run main.py
-│   ├── alembic.ini
-│   ├── alembic/versions/       # Database migrations
-│   ├── tests/                  # pytest tests (use a separate test database)
-│   ├── uploads/                # Uploaded files (not committed)
-│   └── app/
-│       ├── main.py             # FastAPI app, routers, CORS, startup (report + MCP)
-│       ├── config.py           # Settings from .env
-│       ├── database.py         # Engine, sessions, get_db()
-│       ├── models.py           # SQLAlchemy models (10 tables)
-│       ├── schemas.py          # Pydantic Create / Update / Response schemas
-│       ├── dependencies.py     # get_current_user_id(): the logged-in user, from the session cookie
-│       ├── security.py         # Password hashing (scrypt) and login tokens
-│       ├── manage.py           # Account commands: list-users, set-login
-│       ├── startup_report.py   # The ✓ / ✗ lines printed when the backend starts
-│       ├── mcp_server.py       # MCP server (tools: ask_mentor, ping)
-│       ├── ai/                 # Mentor: Gemini client, prompts, user profile, attachments, resume reading
-│       ├── routers/            # HTTP endpoints
-│       ├── services/           # Business rules (404 / 409 checks, ownership)
-│       └── repositories/       # Database queries
-└── frontend/
-    ├── package.json
-    ├── vite.config.js
-    ├── vercel.json             # Deployed: forwards /api to the backend on Render
-    └── src/
-        ├── App.jsx             # Routes
-        ├── main.jsx
-        ├── layouts/            # MainLayout (navbar)
-        ├── pages/              # Dashboard, Skills, LearningGoals, CareerGoals, Projects,
-        │                       # ProjectDetail, MentorChat
-        ├── components/         # BotAvatar, ProgressRing, RichEditor, FormModal, Modal,
-        │                       # ResumeImportModal, PageAssistant (floating bot), ...
-        │   └── mentor/         # Chat: MentorHome, ChatSidebar, ChatMessage, Composer
-        ├── hooks/              # useResource (load / create / update / delete), useMe (name, theme)
-        ├── services/           # api.js, mentorChat.js, sse.js, uploads.js, chats.js
-        └── utils/              # format.js
+**Prerequisites:** Python 3.12+ with [uv](https://docs.astral.sh/uv/) (or pip), Node.js 20.19+, Docker.
+
+### 1. Database
+
+```bash
+# First time
+docker run -d --name mentora-postgres \
+  -e POSTGRES_USER=mentora -e POSTGRES_PASSWORD=YOUR_DB_PASSWORD -e POSTGRES_DB=mentora \
+  -p 5432:5432 -v mentora_pgdata:/var/lib/postgresql/data \
+  --restart unless-stopped postgres:16
+
+# Later, if it's stopped
+docker start mentora-postgres
 ```
 
-The backend follows a layered design: **router → service → repository → database**.
+### 2. Backend
+
+```bash
+cd backend
+cp .env.example .env            # then set DATABASE_URL and GEMINI_API_KEY (see Configuration)
+uv run alembic upgrade head     # create the tables
+uv run main.py                  # http://127.0.0.1:8002, reloads when app/ changes
+```
+
+`uv run` creates `.venv` and installs from `uv.lock` on first use. To use pip instead:
+`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python main.py`.
+
+On startup the backend prints one ✓ / ✗ line per part; a ✗ line explains how to fix it:
+
+```text
+INFO:     ── Mentora AI ──────────────────────────────────────────────
+INFO:     ✓ Database    connected to mentora on localhost:5432
+INFO:     ✓ Migrations  up to date (d8d0a4fedbd1)
+INFO:     ✓ Users       1 account, 1 can log in
+INFO:     ✓ Data        34 skills, 0 learning goals, 6 projects, 4 chats
+INFO:     ✓ Gemini      key set, model gemini-3.5-flash-lite (not called now, to save quota)
+INFO:     ✓ Uploads     .../backend/uploads (2 files, max 20 MB each)
+INFO:     ✓ MCP         /mcp (Bearer token), acts as "Keerthi", tools: ask_mentor, ping
+INFO:     ── All systems ready · API docs at /docs ──────────────────────
+```
+
+API docs (Swagger): http://127.0.0.1:8002/docs
+
+### 3. Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev                     # http://localhost:5173
+```
+
+The frontend has no `.env`. The Vite dev server reads `API_HOST` / `API_PORT` from
+`backend/.env` and proxies `/api` to the backend, so the login cookie is same-origin.
+Nothing from `backend/.env` reaches the browser.
+
+---
+
+## Configuration
+
+All settings live in `backend/.env` (git-ignored; template in `backend/.env.example`).
+Secrets are never in code.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DATABASE_URL` | **required** | `postgresql+psycopg2://mentora:PASSWORD@localhost:5432/mentora` (`postgres://` URLs are converted) |
+| `GEMINI_API_KEY` | none | Needed for every AI feature. Get one at [Google AI Studio](https://aistudio.google.com/apikey) |
+| `GEMINI_MODEL` | `gemini-3.5-flash` | Switch models without code changes |
+| `GEMINI_TIMEOUT_SECONDS` | `60` | Give up on a Gemini request after this long |
+| `CHAT_HISTORY_LIMIT` | `20` | Earlier messages sent with each new one (`0` = none) |
+| `MAX_UPLOAD_MB` | `20` | Max size per uploaded file |
+| `UPLOAD_DIR` | `backend/uploads` | Where uploaded files are stored |
+| `API_HOST` / `API_PORT` | `127.0.0.1` / `8002` | Where `uv run main.py` listens (the Vite proxy uses them too) |
+| `CORS_ORIGINS` | empty | Extra browser origins, comma-separated. Not needed when `/api` is proxied |
+| `SESSION_DAYS` | `30` | How long a login lasts |
+| `COOKIE_SECURE` | `false` | Set `true` when served over HTTPS |
+| `MCP_TOKEN` | none | Bearer token for `/mcp`. Without it, `/mcp` refuses every request |
+| `MCP_USER_ID` | none | The account MCP tools act as |
+
+Generate an MCP token with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+
+---
+
+## Deployment
+
+- **Frontend:** Vercel, project root `frontend`. `frontend/vercel.json` rewrites `/api/*` to the
+  Render backend (so the login cookie stays same-site) and every other path to `index.html`.
+  Update the backend URL there if it moves.
+- **Backend:** Render, running uvicorn with its own host/port. Set `DATABASE_URL`,
+  `GEMINI_API_KEY` and `COOKIE_SECURE=true` in its environment.
 
 ---
 
 ## How it works
 
-Two [Mermaid](https://mermaid.js.org/) diagrams (GitHub and VS Code's Markdown preview draw them):
-the overall flow, and the sequence of one mentor chat message.
-
-### Flow: architecture
+The backend is layered: **router → service → repository → database**. Routers handle HTTP,
+services hold the rules (404 / 409 checks, ownership), repositories run the queries.
+`get_current_user_id()` reads the login cookie (401 without one) and every query is filtered by
+that user, so another user's data always returns 404.
 
 ```mermaid
 flowchart TB
     user(["You (browser)"])
 
-    subgraph FE["Frontend: React + Vite (localhost:5173)"]
+    subgraph FE["Frontend: React + Vite"]
         direction LR
         pages["Pages<br/>Dashboard, Skills, Goals,<br/>Career, Projects, Mentor"] --> services["services/<br/>api.js, chats.js, sse.js, uploads.js"]
     end
 
-    subgraph BE["Backend: FastAPI (127.0.0.1:8002)"]
+    subgraph BE["Backend: FastAPI"]
         direction LR
         routers["routers/<br/>HTTP endpoints"] --> svc["services/<br/>rules, 404 / 409 checks"] --> repos["repositories/<br/>database queries"]
         routers --> ai["ai/<br/>prompts, profile, Gemini client"]
@@ -98,7 +171,7 @@ flowchart TB
 
     subgraph EXT["Storage and services"]
         direction LR
-        db[("PostgreSQL in Docker<br/>users, skills, goals, projects,<br/>chats, uploads, ...")]
+        db[("PostgreSQL<br/>users, skills, goals, projects,<br/>chats, uploads, ...")]
         files[("backend/uploads/<br/>uploaded files")]
         gemini["Google Gemini API"]
     end
@@ -110,14 +183,10 @@ flowchart TB
     ai -- "prompt + history + files" --> gemini
 ```
 
-Every request goes **router → service → repository → database**. `get_current_user_id()` reads
-the login cookie (401 if there is none), and every query is filtered by that user, so each account
-only sees its own data.
+### A mentor chat message
 
-### Sequence: chatting with the mentor
-
-The reply streams in word by word (Server-Sent Events). When it is finished, the page saves the
-whole conversation in the database.
+The reply streams token by token over Server-Sent Events; when it finishes, the page saves the
+whole conversation.
 
 ```mermaid
 sequenceDiagram
@@ -144,197 +213,75 @@ sequenceDiagram
     API-->>C: data: [DONE]
     C->>API: PUT /api/conversations/{id} (title + all messages)
     API->>DB: Replace the chat's messages
-    Note over C,DB: Reopening the chat later loads it with GET /api/conversations/{id}
 ```
 
-If Gemini fails (no key, quota used up, timeout), the stream sends `data: {"error": "..."}`
-instead of `[DONE]`, and the error is shown in the reply bubble and saved with the chat.
+### Data and security
+
+- **PostgreSQL** holds everything: users, sessions, skills, user skills, learning goals and
+  progress, career goals, projects (incl. write-up HTML), upload metadata, conversations and
+  messages. Deletes cascade to everything a row owns.
+- **`backend/uploads/`** holds the uploaded files themselves. Nothing is kept in browser storage.
+- **Passwords** are hashed with scrypt. A login is a random token in an **httpOnly cookie**;
+  the database stores only its SHA-256.
+- **Sent to Gemini** per reply: your message, recent chat history with its files, and a text
+  summary of your profile.
+
+### Project structure
+
+```
+backend/
+├── main.py                 # Dev entry point: uv run main.py
+├── alembic/versions/       # Migrations
+├── tests/                  # pytest (separate test database)
+└── app/
+    ├── main.py             # FastAPI app, routers, CORS, startup report, MCP mount
+    ├── config.py           # Settings from .env
+    ├── models.py / schemas.py
+    ├── dependencies.py     # get_current_user_id() from the session cookie
+    ├── security.py         # scrypt hashing, login tokens
+    ├── manage.py           # CLI: list-users, set-login
+    ├── startup_report.py   # ✓ / ✗ startup lines
+    ├── mcp_server.py       # MCP tools: ask_mentor, ping
+    ├── ai/                 # Gemini client, prompts, profile context, page assistant, resume parsing
+    ├── routers/ → services/ → repositories/
+frontend/
+├── vite.config.js          # /api proxy to the backend
+├── vercel.json             # Production rewrites
+└── src/
+    ├── pages/              # Dashboard, Skills, LearningGoals, CareerGoals, Projects, ProjectDetail, MentorChat
+    ├── components/         # PageAssistant, RichEditor, ResumeImportModal, mentor/ (chat UI), ...
+    ├── hooks/              # useResource (CRUD), useMe (name, theme)
+    └── services/           # api.js, mentorChat.js, sse.js, uploads.js, chats.js
+```
 
 ---
 
-## Getting started
+## API reference
 
-### Prerequisites
-
-- Python 3.12+ and [uv](https://docs.astral.sh/uv/) (or pip)
-- Node.js 20.19+ and npm
-- Docker (for PostgreSQL)
-
-### 1. Start PostgreSQL (Docker)
-
-First time only:
-
-```bash
-docker run -d --name mentora-postgres \
-  -e POSTGRES_USER=mentora -e POSTGRES_PASSWORD=YOUR_DB_PASSWORD -e POSTGRES_DB=mentora \
-  -p 5432:5432 -v mentora_pgdata:/var/lib/postgresql/data \
-  --restart unless-stopped postgres:16
-```
-
-Afterwards, if it's stopped:
-
-```bash
-docker start mentora-postgres
-```
-
-### 2. Backend
-
-The backend uses [uv](https://docs.astral.sh/uv/). Install it once:
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-`uv run` creates `backend/.venv` and installs the dependencies from `uv.lock`
-automatically the first time, so there is no separate install step.
-
-Prefer pip? `backend/requirements.txt` lists the same packages (only the ones the code
-uses, at the tested versions):
-
-```bash
-cd backend
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python main.py
-```
-
-Create `backend/.env` (copy `backend/.env.example`; if you already have a `.env`,
-just add the lines you're missing). **Private addresses, passwords and keys live only in the
-`.env` files** (git-ignored), never in the code:
-
-```env
-# Required: the same password as POSTGRES_PASSWORD above
-DATABASE_URL=postgresql+psycopg2://mentora:YOUR_DB_PASSWORD@localhost:5432/mentora
-# Optional, these are the defaults: where `uv run main.py` runs the backend
-API_HOST=127.0.0.1
-API_PORT=8002
-# MCP clients send "Authorization: Bearer <MCP_TOKEN>"; the tools act as MCP_USER_ID.
-# Make a token: python -c "import secrets; print(secrets.token_urlsafe(32))"
-MCP_TOKEN=a-long-random-token
-MCP_USER_ID=1
-
-# Required for the AI mentor (see "About the AI mentor" below)
-GEMINI_API_KEY=your-key-here
-# Optional, defaults to gemini-3.5-flash
-GEMINI_MODEL=gemini-3.5-flash
-# Optional, defaults to 60
-GEMINI_TIMEOUT_SECONDS=60
-# Optional: earlier chat messages sent with each new one (0 = none), defaults to 20
-CHAT_HISTORY_LIMIT=20
-# Optional: max size per uploaded file in MB, defaults to 20
-MAX_UPLOAD_MB=20
-```
-
-Create the tables and start the server:
-
-```bash
-cd backend
-uv run alembic upgrade head
-uv run main.py          # http://API_HOST:API_PORT, restarts when app/ changes
-```
-
-On startup the terminal shows one ✓ / ✗ line per part, so you can see what works:
-
-```text
-INFO:     ── Mentora AI ──────────────────────────────────────────────
-INFO:     ✓ Database    connected to mentora on localhost:5432
-INFO:     ✓ Migrations  up to date (d8d0a4fedbd1)
-INFO:     ✓ Users       1 account, 1 can log in
-INFO:     ✓ Data        34 skills, 0 learning goals, 6 projects, 4 chats
-INFO:     ✓ Gemini      key set, model gemini-3.5-flash-lite (not called now, to save quota)
-INFO:     ✓ Uploads     .../backend/uploads (2 files, max 20 MB each)
-INFO:     ✓ MCP         /mcp (Bearer token), acts as "Keerthi", tools: ask_mentor, ping
-INFO:     ── All systems ready · API docs at /docs ──────────────────────
-```
-
-A ✗ line says what's wrong and how to fix it (e.g. `docker start mentora-postgres`). Each MCP
-tool call also prints a line: `MCP ▶ ask_mentor called`, then `MCP ✓ ask_mentor done in 1.2s`
-(or `MCP ✗ ... failed`).
-Change the name with the ✏️ next to the Dashboard greeting (or `PATCH /api/me`); the app
-and the mentor then greet you by it.
-
-- API docs (Swagger): http://127.0.0.1:8002/docs
-- MCP endpoint: http://127.0.0.1:8002/mcp
-
-### 3. Frontend
-
-```bash
-cd frontend
-npm install
-```
-
-The frontend has no `.env` of its own: the dev server reads `API_HOST` and `API_PORT` from
-`backend/.env` and forwards `/api` on localhost:5173 to the backend, so the login cookie works.
-Nothing from `backend/.env` is sent to the browser.
-
-```bash
-npm run dev
-```
-
-Open http://localhost:5173 (the backend's CORS only allows port 5173).
-
-**Deployed** (Vercel, project root `frontend`): there is no dev server, so `frontend/vercel.json`
-rewrites `/api/*` to the backend on Render (same site for the browser, so the login cookie still
-works) and every other path to `index.html`. Change the backend URL there if it moves.
-
----
-
-## Features
-
-### Accounts and logins
-
-- **Sign up / Log in** pages (email + password); anyone can create an account, and each account
-  has its own skills, goals, career roles, projects and chats. **Log out** is in the navbar.
-- Passwords are hashed with **scrypt** (Python standard library); the plain password is never stored.
-- The login is a random token in an **httpOnly cookie** (JavaScript can't read it), valid
-  `SESSION_DAYS` (30) days; the database keeps only its SHA-256. Log out deletes the session.
-- An account from before logins existed gets an email and password with
-  `uv run python -m app.manage set-login --user-id 1 --email you@example.com` (asks for the password).
-
-### Frontend pages
-
-| Page | URL | What it does |
-|---|---|---|
-| Dashboard | `/` | Greeting by name, counts per page, learning-goal progress bars, AI tip of the day |
-| Skills | `/skills` | Table with your **level** and **status** per skill (change in place), filters, add/edit/delete; **Import from resume** |
-| Learning Goals | `/goals` | Cards with a progress ring; **Update progress** (slider, note, history, mark completed) |
-| Career Goals | `/career` | Target roles with needed skills; readiness ring; add/remove skills in place; ask for a roadmap |
-| Projects | `/projects` | Cards (cover image from the write-up); **Import from resume**; `/projects/:id` has a rich-text write-up with images |
-| AI Mentor | `/mentor` | ChatGPT-style chat: streaming replies, chat list, rename, edit messages, file uploads |
-
-The Skills, Goals, Career and Projects pages have a **floating Mentora bot** (bottom right): ask it in
-plain words ("set Docker to advanced", "I'm 60% done with my RAG goal") and it changes that page's
-data, then the page refreshes. It asks before deleting anything.
-
-The whole app is dark by default (sun/moon button in the navbar for light), and works on phones.
-
-### Backend API
-
-Everything except `/api/auth/*` needs a login (else **401**). The user comes from the login
-cookie, never from the request, and another user's data always returns **404**.
+Everything except `/api/auth/*` requires a login. Full interactive docs at `/docs`.
 
 | Resource | Endpoints |
 |---|---|
-| Accounts | `POST /api/auth/register` (`{full_name, email, password}`), `POST /api/auth/login`, `POST /api/auth/logout` |
-| Skills (per user) | `GET/POST /api/skills`, `GET/PATCH/DELETE /api/skills/{id}` |
+| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout` |
+| Current user | `GET/PATCH /api/me` (name, theme) |
+| Skills | `GET/POST /api/skills`, `GET/PATCH/DELETE /api/skills/{id}` |
+| User skills | `GET/POST /api/user-skills`, `GET/PATCH/DELETE /api/user-skills/{id}` |
 | Learning goals | `GET/POST /api/learning-goals`, `GET/PATCH/DELETE /api/learning-goals/{id}` |
 | Learning progress | `GET/POST /api/learning-goals/{goal_id}/progress`, `GET/PATCH/DELETE .../progress/{id}` |
-| User skills | `GET/POST /api/user-skills`, `GET/PATCH/DELETE /api/user-skills/{id}` |
 | Career goals | `GET/POST /api/career-goals`, `GET/PATCH/DELETE /api/career-goals/{id}` |
 | Projects | `GET/POST /api/projects`, `GET/PATCH/DELETE /api/projects/{id}` |
-| Current user | `GET/PATCH /api/me` (name, theme) |
-| Page assistant | `POST /api/ai/assistant` (`{page, message, history}` → `{reply, actions, changed}`; Gemini calls tools that change the page's data) |
-| AI chat | `POST /api/ai/chat`, `POST /api/ai/chat/stream` (Server-Sent Events), `GET /api/ai/tip` (saved for the day; `?refresh=true` for a new one) |
-| Mentor chats | `GET /api/conversations`, `GET/PUT/PATCH/DELETE /api/conversations/{id}` (`PUT` saves the whole chat) |
-| Resume import | `POST /api/resume/parse` (`{upload_id}` → skills and projects found; saves nothing), `POST /api/resume/import` (saves the ones you picked) |
-| Dashboard | `GET /api/dashboard` (counts per page + learning-goal progress) |
-| Uploads | `POST /api/uploads` (multipart), `GET` / `DELETE /api/uploads/{id}`: images, PDFs, text/code, max `MAX_UPLOAD_MB` |
-| MCP | `/mcp` (Streamable HTTP; tools `ask_mentor`, `ping`); needs `Authorization: Bearer <MCP_TOKEN>` |
+| Dashboard | `GET /api/dashboard` |
+| AI chat | `POST /api/ai/chat`, `POST /api/ai/chat/stream` (SSE), `GET /api/ai/tip` (`?refresh=true` for a new one) |
+| Page assistant | `POST /api/ai/assistant` (`{page, message, history}` → `{reply, actions, changed}`) |
+| Conversations | `GET /api/conversations`, `GET/PUT/PATCH/DELETE /api/conversations/{id}` |
+| Resume import | `POST /api/resume/parse` (preview, saves nothing), `POST /api/resume/import` |
+| Uploads | `POST /api/uploads` (multipart), `GET/DELETE /api/uploads/{id}` |
+| MCP | `/mcp` (Streamable HTTP, `Authorization: Bearer <MCP_TOKEN>`) |
 
-Status codes: `201` created, `204` deleted, `404` not found, `409` duplicate
-(skill name, or a skill the user already has), `422` invalid input.
+**Status codes:** `201` created, `204` deleted, `401` not logged in, `404` not found (or not
+yours), `409` duplicate, `422` invalid input.
 
-Allowed status values:
+**Enum values:**
 
 | Field | Values |
 |---|---|
@@ -344,92 +291,51 @@ Allowed status values:
 | User skill status | `want_to_learn`, `learning`, `acquired` |
 | User skill proficiency | `beginner`, `intermediate`, `advanced`, `expert` |
 
-### Database tables
-
-`users` (incl. `password_hash`, `theme` and today's tip), `sessions` (logins), `skills` (per user), `user_skills`, `learning_goals`, `learning_progress`,
-`career_goals` (incl. `required_skills`), `projects` (incl. `content`, the write-up HTML),
-`uploads` (file details; the files are in `backend/uploads/`), `conversations` and
-`chat_messages` (mentor chats). Deleting a user (or a goal or
-skill) also deletes everything that belongs to it (`ON DELETE CASCADE`).
-
-### Where the data is stored
-
-| Where | What |
-|---|---|
-| PostgreSQL in Docker (`mentora-postgres`, volume `mentora_pgdata`) | Everything: your name and theme, skills, goals, progress, career goals, projects, mentor chats, today's tip, upload details |
-| `backend/uploads/` (git-ignored) | The uploaded files themselves (chat attachments, project images) |
-| `backend/.env` (git-ignored) | Database URL, Gemini API key and model |
-
-Nothing is kept in the browser (no localStorage).
-
-Sent to Google Gemini for each reply: your message, the recent chat history with its files,
-and a text summary of your profile (skills, goals, career roles, projects).
-
 ---
 
-## About the AI mentor
+## AI mentor
 
-Replies come from **Google Gemini** (`google-genai` SDK, `backend/app/ai/llm_client.py`).
+- **Personalised:** each reply includes your name, skills, goals (with latest progress), career
+  roles and projects (`ai/context.py`, max 20 per list). Still answers if the database is down.
+- **Attachments:** up to 5 images, PDFs or text/code files per message. Types are checked from
+  content; SVG, Word and video are rejected.
+- **Page assistant tools** (`ai/assistant.py`, e.g. `set_skill`, `log_progress`, `update_project`)
+  go through the normal services, so the same validation applies.
+- **Resume import** finds skills and projects in a PDF, image or text resume; you choose what to save.
 
-- **Knows your data:** each reply includes your name, skills, goals (with latest progress), career
-  roles and projects (`ai/context.py`, max 20 per list). If the database is down it still answers.
-- **Chats like ChatGPT:** streaming Markdown replies, chat list, follow-ups (newest
-  `CHAT_HISTORY_LIMIT` = 20 messages sent), edit a sent message, rename chats. Saved in the database.
-- **Files:** attach up to 5 images, PDFs or code/text files per message (`MAX_UPLOAD_MB` each).
-  The type is checked from the content; SVG, Word and video are rejected.
-- **Page assistant:** on Skills, Goals, Career and Projects, Gemini gets *tools* for that page only
-  (`ai/assistant.py`, e.g. `set_skill`, `log_progress`, `update_project`). Each tool goes through the
-  normal services, so the same checks apply; deletes need your confirmation first.
-- **Greets you by name**, and **Import from resume** (Skills / Projects pages) finds your skills
-  and projects in a PDF, image or text resume; you pick what to save.
+**Free tier:** about 20 requests per day per model. When the quota runs out the chat says when it
+resets; switch `GEMINI_MODEL` (e.g. `gemini-3.5-flash-lite`, which has its own limit) or enable billing.
 
-**Setup:** create a key at [Google AI Studio](https://aistudio.google.com/apikey), put
-`GEMINI_API_KEY=...` in `backend/.env` and restart the backend. Only the backend reads the key;
-never put it in frontend code. Change models with
-`GEMINI_MODEL`, no code changes needed.
-
-**Free tier:** about **20 requests per day per model** (chat messages and tips). When it runs out
-the chat says when it resets; switch `GEMINI_MODEL` (e.g. `gemini-3.5-flash-lite`) or enable billing.
-
-**When Gemini fails** there is no fake answer; the error is shown in the reply bubble:
+**Errors are never faked**; they appear in the reply bubble:
 
 | Problem | `POST /api/ai/chat` | `POST /api/ai/chat/stream` |
 |---|---|---|
-| Key missing or rejected, model not found | `503` | `data: {"error": "..."}` |
+| Key missing/rejected, model not found | `503` | `data: {"error": "..."}` |
 | Rate limit / quota | `429` | `data: {"error": "..."}` |
-| Gemini down, timeout (after 3 tries) | `503` / `504` | `data: {"error": "..."}` |
+| Gemini down or timeout (after 3 tries) | `503` / `504` | `data: {"error": "..."}` |
 | Attached file no longer exists | `400` | `400` |
-| Stream cut off midway | | tokens so far, then `data: {"error": "..."}` (no `[DONE]`) |
+| Stream cut off midway | | tokens so far, then `data: {"error": "..."}` |
 
 ---
 
-## Tests
+## Development
 
+Run from `backend/` unless noted.
 
-```bash
-cd backend
-docker start mentora-postgres   # if it's not running
-uv run pytest                   # add -v for each test name
-```
-
-
----
-
-## Useful commands
-
-| Task | Command (run inside `backend/`) |
+| Task | Command |
 |---|---|
-| Add a Python dependency | `uv add <package>` (updates `pyproject.toml` and `uv.lock`) |
-| List accounts | `uv run python -m app.manage list-users` |
-| Give an account an email + password | `uv run python -m app.manage set-login --user-id 1 --email you@example.com` |
+| Run tests | `uv run pytest` (needs `mentora-postgres` running) |
+| Add a dependency | `uv add <package>` |
 | Apply migrations | `uv run alembic upgrade head` |
-| Create a migration after changing models | `uv run alembic revision --autogenerate -m "describe change"` |
+| Create a migration | `uv run alembic revision --autogenerate -m "describe change"` |
+| List accounts | `uv run python -m app.manage list-users` |
+| Set an account's login | `uv run python -m app.manage set-login --user-id 1 --email you@example.com` |
 | Open the database | `docker exec -it mentora-postgres psql -U mentora -d mentora` |
-| Build the frontend (in `frontend/`) | `npm run build` |
+| Build the frontend | `npm run build` (in `frontend/`) |
 
 ---
 
-## Not built yet
+## Roadmap
 
-- Password reset by email, and email verification (accounts are email + password only)
-- Automated frontend tests; dedicated backend tests for career goals and projects CRUD
+- Password reset and email verification
+- Automated frontend tests; backend tests for career goals and projects CRUD

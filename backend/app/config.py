@@ -24,16 +24,16 @@ class Settings(BaseSettings):
     SESSION_DAYS: int = Field(30, ge=1)
     COOKIE_SECURE: bool = False
 
-    # "Forgot password" emails. APP_URL is where the frontend runs (the reset link points there).
-    # Without SMTP_HOST no email is sent: the reset link is printed in the backend's terminal
-    # instead (fine on your own computer). Reset links work for RESET_TOKEN_MINUTES.
-    APP_URL: str = "http://localhost:5173"
+    # "Forgot password" emails a 6-digit code. Without SMTP_HOST no email is sent: the code is
+    # printed in the backend's terminal instead (fine on your own computer). A code works for
+    # RESET_CODE_MINUTES and RESET_CODE_ATTEMPTS wrong tries.
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: SecretStr | None = None
     SMTP_FROM: str = ""
-    RESET_TOKEN_MINUTES: int = Field(30, ge=5)
+    RESET_CODE_MINUTES: int = Field(15, ge=1)
+    RESET_CODE_ATTEMPTS: int = Field(5, ge=1)
 
     # MCP (/mcp) can't use a browser login: clients send "Authorization: Bearer <MCP_TOKEN>"
     # and the tools act as MCP_USER_ID. Without MCP_TOKEN, /mcp refuses every request.

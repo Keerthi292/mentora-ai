@@ -54,17 +54,17 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)) 
 
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
 def forgot_password(payload: ForgotPasswordRequest, background: BackgroundTasks, db: Session = Depends(get_db)):
-    """Email a reset link. The same answer whether or not the email has an account, and the
-    email is sent after the response, so neither the answer nor its timing reveals which do."""
+    """Email a 6-digit reset code. The same answer whether or not the email has an account, and
+    the email is sent after the response, so neither the answer nor its timing reveals which do."""
     email = auth_service.request_password_reset(db, payload.email)
     if email:
         background.add_task(send_email, *email)
-    return {"detail": "If an account uses this email, a reset link is on its way."}
+    return {"detail": "If an account uses this email, a code is on its way."}
 
 
 @router.post("/reset-password", response_model=UserResponse)
 def reset_password(payload: ResetPasswordRequest, response: Response, db: Session = Depends(get_db)):
-    """Choose a new password with the emailed link's token, then log in."""
+    """Choose a new password with the emailed code, then log in."""
     user = auth_service.reset_password(db, payload)
     _set_session_cookie(response, auth_service.start_session(db, user.id))
     return user

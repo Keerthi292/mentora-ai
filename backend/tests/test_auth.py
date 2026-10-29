@@ -156,6 +156,8 @@ def test_each_account_sees_only_its_own_data(anon_client):
 
 # --- Forgot password -----------------------------------------------------------------
 
+NEW_PASSWORD = "brand new pass"
+
 
 @pytest.fixture
 def sent_emails(monkeypatch):
@@ -165,33 +167,41 @@ def sent_emails(monkeypatch):
     return sent
 
 
-def reset_token(email) -> str:
-    _, _, text = email
-    return text.split("reset-password?token=")[1].split()[0]
+def emailed_code(email) -> str:
+    _, subject, _ = email
+    return subject.split()[0]
 
 
-def test_forgot_password_emails_a_link_that_resets_the_password(anon_client, db, sent_emails):
+def forgot(client, email=KEERTHI["email"]):
+    return client.post("/api/auth/forgot-password", json={"email": email})
+
+
+def reset(client, code, password=NEW_PASSWORD, email=KEERTHI["email"]):
+    return client.post("/api/auth/reset-password", json={"email": email, "code": code, "password": password})
+
+
+def test_forgot_password_emails_a_code_that_resets_the_password(anon_client, db, sent_emails):
     register(anon_client)
     other_browser = dict(anon_client.cookies)
     anon_client.cookies.clear()
 
-    response = anon_client.post("/api/auth/forgot-password", json={"email": "KEERTHI@example.com"})
-    assert response.status_code == 202
+    assert forgot(anon_client, "KEERTHI@example.com").status_code == 202
     assert len(sent_emails) == 1 and sent_emails[0][0] == "keerthi@example.com"
-    token = reset_token(sent_emails[0])
-    # Only the token's hash is stored
-    assert db.query(PasswordReset).one().id == token_hash(token)
+    code = emailed_code(sent_emails[0])
+    assert len(code) == 6 and code.isdigit() and code in sent_emails[0][2]
+    # Only the code's hash is stored
+    assert db.query(PasswordReset).one().code_hash == token_hash(code)
 
-    response = anon_client.post("/api/auth/reset-password", json={"token": token, "password": "brand new pass"})
+    response = reset(anon_client, f" {code} ")
     assert response.status_code == 200 and response.json()["email"] == "keerthi@example.com"
     assert anon_client.get(ME).status_code == 200  # logged in
 
     # The new password works, the old one doesn't
     login = lambda password: anon_client.post("/api/auth/login", json={"email": KEERTHI["email"], "password": password})  # noqa: E731
-    assert login("brand new pass").status_code == 200
+    assert login(NEW_PASSWORD).status_code == 200
     assert login(KEERTHI["password"]).status_code == 401
-    # The link works once, and the login from before the reset has ended
-    assert anon_client.post("/api/auth/reset-password", json={"token": token, "password": "another pass 2"}).status_code == 400
+    # The code works once, and the login from before the reset has ended
+    assert reset(anon_client, code, "another pass 2").status_code == 400
     anon_client.cookies.clear()
     anon_client.cookies.update(other_browser)
     assert anon_client.get(ME).status_code == 401
@@ -200,41 +210,51 @@ def test_forgot_password_emails_a_link_that_resets_the_password(anon_client, db,
 def test_forgot_password_answers_the_same_for_unknown_emails(anon_client, sent_emails):
     register(anon_client)
 
-    known = anon_client.post("/api/auth/forgot-password", json={"email": KEERTHI["email"]})
-    unknown = anon_client.post("/api/auth/forgot-password", json={"email": "nobody@example.com"})
+    known, unknown = forgot(anon_client), forgot(anon_client, "nobody@example.com")
 
     assert (known.status_code, known.json()) == (unknown.status_code, unknown.json())
     assert len(sent_emails) == 1
+    # Resetting an unknown email gets the same answer as a wrong code
+    assert reset(anon_client, "123456", email="nobody@example.com").json() == reset(anon_client, "123456").json()
 
 
-def test_a_new_reset_link_replaces_the_old_one(anon_client, sent_emails):
+def test_a_new_code_replaces_the_old_one(anon_client, sent_emails):
     register(anon_client)
-    for _ in range(2):
-        anon_client.post("/api/auth/forgot-password", json={"email": KEERTHI["email"]})
-    old, new = (reset_token(email) for email in sent_emails)
+    forgot(anon_client)
+    forgot(anon_client)
+    old, new = (emailed_code(email) for email in sent_emails)
 
-    assert anon_client.post("/api/auth/reset-password", json={"token": old, "password": "brand new pass"}).status_code == 400
-    assert anon_client.post("/api/auth/reset-password", json={"token": new, "password": "brand new pass"}).status_code == 200
+    if old != new:  # 1 in a million they're the same
+        assert reset(anon_client, old).status_code == 400
+    assert reset(anon_client, new).status_code == 200
 
 
-def test_expired_or_forged_reset_link_is_rejected(anon_client, db, sent_emails):
+def test_code_stops_working_after_too_many_wrong_tries(anon_client, db, sent_emails, monkeypatch):
+    monkeypatch.setattr(settings, "RESET_CODE_ATTEMPTS", 3)
     register(anon_client)
-    anon_client.post("/api/auth/forgot-password", json={"email": KEERTHI["email"]})
-    reset = db.query(PasswordReset).one()
-    reset.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    forgot(anon_client)
+    code = emailed_code(sent_emails[0])
+    wrong = f"{(int(code) + 1) % 10**6:06d}"
+
+    for _ in range(3):
+        assert reset(anon_client, wrong).status_code == 400
+    # Even the right code fails now: the user has to send a new one
+    assert reset(anon_client, code).status_code == 400
+    assert db.query(PasswordReset).count() == 0
+
+
+def test_expired_code_is_rejected(anon_client, db, sent_emails):
+    register(anon_client)
+    forgot(anon_client)
+    db.query(PasswordReset).one().expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
     db.commit()
 
-    for token in (reset_token(sent_emails[0]), "made-up-token"):
-        response = anon_client.post("/api/auth/reset-password", json={"token": token, "password": "brand new pass"})
-        assert response.status_code == 400
+    assert reset(anon_client, emailed_code(sent_emails[0])).status_code == 400
 
 
-def test_reset_password_needs_a_long_enough_password(anon_client, sent_emails):
-    register(anon_client)
-    anon_client.post("/api/auth/forgot-password", json={"email": KEERTHI["email"]})
-
-    response = anon_client.post("/api/auth/reset-password", json={"token": reset_token(sent_emails[0]), "password": "short"})
-    assert response.status_code == 422
+@pytest.mark.parametrize("code, password", [("12345", NEW_PASSWORD), ("abcdef", NEW_PASSWORD), ("123456", "short")])
+def test_reset_password_checks_its_input(anon_client, code, password):
+    assert reset(anon_client, code, password).status_code == 422
 
 
 # --- python -m app.manage set-login ---------------------------------------------------

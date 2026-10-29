@@ -77,15 +77,16 @@ class LoginSession(Base):
 
 
 class PasswordReset(Base):
-    """A "forgot password" link: the email holds a random token; only its SHA-256 is stored.
-    Works once, until expires_at."""
+    """A "forgot password" code: 6 digits emailed to the user; only its SHA-256 is stored.
+    One per user. Works once, until expires_at, and is deleted after too many wrong tries."""
 
     __tablename__ = "password_resets"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # sha256(token) as hex
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
+    code_hash: Mapped[str] = mapped_column(String(64))
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

@@ -63,7 +63,8 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    token: str = Field(min_length=1, max_length=128)
+    email: Email
+    code: str = Field(pattern=r"^\s*\d{6}\s*$")
     password: Password
 
 

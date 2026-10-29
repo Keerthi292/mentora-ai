@@ -1,7 +1,8 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import BotAvatar from "./components/BotAvatar";
+import LoadingScreen from "./components/LoadingScreen";
 import useMe from "./hooks/useMe";
 import MainLayout from "./layouts/MainLayout";
 import AuthPage from "./pages/AuthPage";
@@ -16,16 +17,21 @@ const MentorChat = lazy(() => import("./pages/MentorChat"));
 // Brings the rich-text editor
 const ProjectDetail = lazy(() => import("./pages/ProjectDetail"));
 
+// How long the start-up loading screen stays up, even if the backend answers sooner
+const MIN_LOADING_MS = 10000;
+
 // Logged out: the login / sign-up pages at every address. Logged in: the app.
 function App() {
   const { status, error, retry } = useMe();
+  const [minTimePassed, setMinTimePassed] = useState(false);
 
-  if (status === "loading") {
-    return (
-      <div className="auth-page d-flex align-items-center justify-content-center">
-        <BotAvatar size={64} thinking />
-      </div>
-    );
+  useEffect(() => {
+    const timer = setTimeout(() => setMinTimePassed(true), MIN_LOADING_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (status === "loading" || !minTimePassed) {
+    return <LoadingScreen fullscreen />;
   }
 
   if (status === "offline") {
@@ -65,7 +71,7 @@ function App() {
         <Route
           path="/projects/:id"
           element={
-            <Suspense fallback={<div className="text-body-secondary">Loading project...</div>}>
+            <Suspense fallback={<LoadingScreen messages={["Opening your project"]} />}>
               <ProjectDetail />
             </Suspense>
           }
@@ -73,7 +79,7 @@ function App() {
         <Route
           path="/mentor"
           element={
-            <Suspense fallback={<div className="text-body-secondary">Loading mentor...</div>}>
+            <Suspense fallback={<LoadingScreen messages={["Waking up your mentor", "Loading your chats"]} />}>
               <MentorChat />
             </Suspense>
           }

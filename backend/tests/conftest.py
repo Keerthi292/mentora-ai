@@ -41,9 +41,11 @@ if not os.getenv("TEST_DATABASE_URL") and _dev_url.host not in ("localhost", "12
 
 
 def _create_test_database_if_missing() -> None:
-    test_db_name = make_url(TEST_DATABASE_URL).database
+    test_url = make_url(TEST_DATABASE_URL)
+    test_db_name = test_url.database
+    # Connect to the test database's own server (its "postgres" database), never the dev one.
     # CREATE DATABASE can't run inside a transaction, hence AUTOCOMMIT
-    admin_engine = create_engine(_dev_url, isolation_level="AUTOCOMMIT")
+    admin_engine = create_engine(test_url.set(database="postgres"), isolation_level="AUTOCOMMIT")
     with admin_engine.connect() as conn:
         exists = conn.scalar(
             text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": test_db_name}

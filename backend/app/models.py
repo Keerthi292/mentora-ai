@@ -76,6 +76,22 @@ class LoginSession(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class PasswordReset(Base):
+    """A "forgot password" link: the email holds a random token; only its SHA-256 is stored.
+    Works once, until expires_at."""
+
+    __tablename__ = "password_resets"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # sha256(token) as hex
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class Skill(Base):
     """One of a user's skills, e.g. "Python" or "SQL". Names are unique per user."""
 

@@ -44,6 +44,11 @@ const register = async (data) => {
   setState({ status: "in", me });
 };
 
+const resetPassword = async (token, password) => {
+  const me = await api.post("/api/auth/reset-password", { token, password });
+  setState({ status: "in", me });
+};
+
 const logout = async () => {
   await api.post("/api/auth/logout").catch(() => {}); // logged out here either way
   setState({ status: "out", me: null });
@@ -66,7 +71,8 @@ function firstName(me) {
 
 /**
  * The logged-in user ({ id, full_name, email, theme }) and the login actions:
- * login(email, password), register({ full_name, email, password }), logout(),
+ * login(email, password), register({ full_name, email, password }),
+ * resetPassword(token, password), logout(),
  * update({ full_name?, theme? }), retry() (after "offline").
  */
 function useMe() {
@@ -76,7 +82,7 @@ function useMe() {
     if (state.status === "loading") loadMe();
   }, []);
 
-  return { ...current, name: firstName(current.me), login, register, logout, update, retry };
+  return { ...current, name: firstName(current.me), login, register, resetPassword, logout, update, retry };
 }
 
 export default useMe;

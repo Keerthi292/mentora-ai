@@ -8,8 +8,10 @@ import MainLayout from "./layouts/MainLayout";
 import AuthPage from "./pages/AuthPage";
 import CareerGoals from "./pages/CareerGoals";
 import Dashboard from "./pages/Dashboard";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import LearningGoals from "./pages/LearningGoals";
 import Projects from "./pages/Projects";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import Skills from "./pages/Skills";
 
 // Loaded only when opened: it brings the Markdown renderer, which other pages don't need
@@ -51,6 +53,8 @@ function App() {
     return (
       <Routes>
         <Route path="/register" element={<AuthPage mode="register" />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="*" element={<AuthPage mode="login" />} />
       </Routes>
     );
@@ -61,6 +65,9 @@ function App() {
       {/* Just logged in from one of these: go to the dashboard */}
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="/register" element={<Navigate to="/" replace />} />
+      <Route path="/forgot-password" element={<Navigate to="/" replace />} />
+      {/* A reset link still works while logged in (e.g. opened in this browser) */}
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       {/* Every page inside MainLayout gets the navbar */}
       <Route element={<MainLayout />}>
         <Route path="/" element={<Dashboard />} />

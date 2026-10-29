@@ -21,6 +21,7 @@ from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from app.config import BACKEND_DIR, settings
+from app.mailer import email_configured
 from app.models import Conversation, LearningGoal, Project, Skill, User
 
 logger = logging.getLogger(__name__)
@@ -128,6 +129,12 @@ def _uploads() -> str:
     return f"{folder} ({files} files, max {settings.MAX_UPLOAD_MB} MB each)"
 
 
+def _email() -> str:
+    if not email_configured():
+        return "off (no SMTP_HOST): reset links are printed in this terminal"
+    return f"{settings.SMTP_HOST}:{settings.SMTP_PORT}, reset links point to {settings.APP_URL}"
+
+
 def _line(label: str, check: Callable[[], str]) -> bool:
     try:
         logger.info("%s %-11s %s", OK, label, check())
@@ -152,6 +159,7 @@ def print_startup_report(engine: Engine, mcp_tools: list[str]) -> bool:
     results += [
         _line("Gemini", _gemini),
         _line("Uploads", _uploads),
+        _line("Email", _email),
         _line("MCP", lambda: _mcp(engine, mcp_tools)),
     ]
     ok = all(results)

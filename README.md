@@ -32,7 +32,8 @@ career goals and projects, and chat with an AI mentor that knows all of them.
 - **Page assistant:** a floating bot on Skills, Goals, Career and Projects changes that page's
   data from plain-language requests ("set Docker to advanced", "I'm 60% done with my RAG goal").
   It asks before deleting anything.
-- **Accounts:** email + password sign-up; each account sees only its own data.
+- **Accounts:** email + password sign-up, "forgot password" reset by email; each account sees
+  only its own data.
 - **Dark theme** by default (light toggle in the navbar), responsive on phones.
 - **MCP server** at `/mcp` so external AI clients can ask the mentor (optional).
 
@@ -128,6 +129,10 @@ Secrets are never in code.
 | `CORS_ORIGINS` | empty | Extra browser origins, comma-separated. Not needed when `/api` is proxied |
 | `SESSION_DAYS` | `30` | How long a login lasts |
 | `COOKIE_SECURE` | `false` | Set `true` when served over HTTPS |
+| `APP_URL` | `http://localhost:5173` | Where the frontend runs; password reset links point here |
+| `SMTP_HOST` / `SMTP_PORT` | empty / `587` | Mail server for reset emails. Empty = the link is printed in the backend terminal |
+| `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | empty | Mail login and sender (`SMTP_FROM` defaults to `SMTP_USER`) |
+| `RESET_TOKEN_MINUTES` | `30` | How long a reset link works |
 | `MCP_TOKEN` | none | Bearer token for `/mcp`. Without it, `/mcp` refuses every request |
 | `MCP_USER_ID` | none | The account MCP tools act as |
 
@@ -222,7 +227,9 @@ sequenceDiagram
   messages. Deletes cascade to everything a row owns.
 - **`backend/uploads/`** holds the uploaded files themselves. Nothing is kept in browser storage.
 - **Passwords** are hashed with scrypt. A login is a random token in an **httpOnly cookie**;
-  the database stores only its SHA-256.
+  the database stores only its SHA-256. Password reset links work the same way: a one-time
+  random token, stored only as its SHA-256, valid for `RESET_TOKEN_MINUTES`. Resetting ends
+  every other login of the account.
 - **Sent to Gemini** per reply: your message, recent chat history with its files, and a text
   summary of your profile.
 
@@ -239,6 +246,7 @@ backend/
     ├── models.py / schemas.py
     ├── dependencies.py     # get_current_user_id() from the session cookie
     ├── security.py         # scrypt hashing, login tokens
+    ├── mailer.py           # SMTP emails (password reset); printed to the terminal without SMTP_HOST
     ├── manage.py           # CLI: list-users, set-login
     ├── startup_report.py   # ✓ / ✗ startup lines
     ├── mcp_server.py       # MCP tools: ask_mentor, ping
@@ -262,7 +270,7 @@ Everything except `/api/auth/*` requires a login. Full interactive docs at `/doc
 
 | Resource | Endpoints |
 |---|---|
-| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout` |
+| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/auth/forgot-password`, `POST /api/auth/reset-password` |
 | Current user | `GET/PATCH /api/me` (name, theme) |
 | Skills | `GET/POST /api/skills`, `GET/PATCH/DELETE /api/skills/{id}` |
 | User skills | `GET/POST /api/user-skills`, `GET/PATCH/DELETE /api/user-skills/{id}` |
@@ -337,5 +345,5 @@ Run from `backend/` unless noted.
 
 ## Roadmap
 
-- Password reset and email verification
+- Email verification
 - Automated frontend tests; backend tests for career goals and projects CRUD

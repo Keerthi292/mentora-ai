@@ -86,9 +86,16 @@ function AuthPage({ mode }) {
               />
             </div>
             <div className="mb-3">
-              <label className="form-label" htmlFor="auth-password">
-                Password
-              </label>
+              <div className="d-flex justify-content-between align-items-baseline">
+                <label className="form-label" htmlFor="auth-password">
+                  Password
+                </label>
+                {!isRegister && (
+                  <Link to="/forgot-password" className="small">
+                    Forgot password?
+                  </Link>
+                )}
+              </div>
               <div className="input-group">
                 <input
                   id="auth-password"

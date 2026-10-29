@@ -13,7 +13,8 @@ from app import manage
 from app.config import settings
 from app.dependencies import SESSION_COOKIE
 from app.mcp_server import RequireMcpToken
-from app.models import LoginSession, User
+from app.models import LoginSession, PasswordReset, User
+from app.routers import auth as auth_router
 from app.security import hash_password, token_hash, verify_password
 
 ME = "/api/me"
@@ -151,6 +152,89 @@ def test_each_account_sees_only_its_own_data(anon_client):
     assert anon_client.get("/api/skills").json() == []
     assert anon_client.get("/api/projects").json() == []
     assert anon_client.get(ME).json()["full_name"] == "Friend"
+
+
+# --- Forgot password -----------------------------------------------------------------
+
+
+@pytest.fixture
+def sent_emails(monkeypatch):
+    """Emails the app would send, as (to, subject, text), instead of sending them."""
+    sent = []
+    monkeypatch.setattr(auth_router, "send_email", lambda *email: sent.append(email))
+    return sent
+
+
+def reset_token(email) -> str:
+    _, _, text = email
+    return text.split("reset-password?token=")[1].split()[0]
+
+
+def test_forgot_password_emails_a_link_that_resets_the_password(anon_client, db, sent_emails):
+    register(anon_client)
+    other_browser = dict(anon_client.cookies)
+    anon_client.cookies.clear()
+
+    response = anon_client.post("/api/auth/forgot-password", json={"email": "KEERTHI@example.com"})
+    assert response.status_code == 202
+    assert len(sent_emails) == 1 and sent_emails[0][0] == "keerthi@example.com"
+    token = reset_token(sent_emails[0])
+    # Only the token's hash is stored
+    assert db.query(PasswordReset).one().id == token_hash(token)
+
+    response = anon_client.post("/api/auth/reset-password", json={"token": token, "password": "brand new pass"})
+    assert response.status_code == 200 and response.json()["email"] == "keerthi@example.com"
+    assert anon_client.get(ME).status_code == 200  # logged in
+
+    # The new password works, the old one doesn't
+    login = lambda password: anon_client.post("/api/auth/login", json={"email": KEERTHI["email"], "password": password})  # noqa: E731
+    assert login("brand new pass").status_code == 200
+    assert login(KEERTHI["password"]).status_code == 401
+    # The link works once, and the login from before the reset has ended
+    assert anon_client.post("/api/auth/reset-password", json={"token": token, "password": "another pass 2"}).status_code == 400
+    anon_client.cookies.clear()
+    anon_client.cookies.update(other_browser)
+    assert anon_client.get(ME).status_code == 401
+
+
+def test_forgot_password_answers_the_same_for_unknown_emails(anon_client, sent_emails):
+    register(anon_client)
+
+    known = anon_client.post("/api/auth/forgot-password", json={"email": KEERTHI["email"]})
+    unknown = anon_client.post("/api/auth/forgot-password", json={"email": "nobody@example.com"})
+
+    assert (known.status_code, known.json()) == (unknown.status_code, unknown.json())
+    assert len(sent_emails) == 1
+
+
+def test_a_new_reset_link_replaces_the_old_one(anon_client, sent_emails):
+    register(anon_client)
+    for _ in range(2):
+        anon_client.post("/api/auth/forgot-password", json={"email": KEERTHI["email"]})
+    old, new = (reset_token(email) for email in sent_emails)
+
+    assert anon_client.post("/api/auth/reset-password", json={"token": old, "password": "brand new pass"}).status_code == 400
+    assert anon_client.post("/api/auth/reset-password", json={"token": new, "password": "brand new pass"}).status_code == 200
+
+
+def test_expired_or_forged_reset_link_is_rejected(anon_client, db, sent_emails):
+    register(anon_client)
+    anon_client.post("/api/auth/forgot-password", json={"email": KEERTHI["email"]})
+    reset = db.query(PasswordReset).one()
+    reset.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    db.commit()
+
+    for token in (reset_token(sent_emails[0]), "made-up-token"):
+        response = anon_client.post("/api/auth/reset-password", json={"token": token, "password": "brand new pass"})
+        assert response.status_code == 400
+
+
+def test_reset_password_needs_a_long_enough_password(anon_client, sent_emails):
+    register(anon_client)
+    anon_client.post("/api/auth/forgot-password", json={"email": KEERTHI["email"]})
+
+    response = anon_client.post("/api/auth/reset-password", json={"token": reset_token(sent_emails[0]), "password": "short"})
+    assert response.status_code == 422
 
 
 # --- python -m app.manage set-login ---------------------------------------------------

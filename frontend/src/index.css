@@ -1011,6 +1011,236 @@ body {
   color: var(--bs-secondary-color);
 }
 
+/* ---- Loading screen (components/LoadingScreen.jsx) ---- */
+
+.loader {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  padding: 3rem 1rem;
+  text-align: center;
+  animation: loader-in 0.4s ease-out;
+}
+
+.loader-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  overflow: hidden;
+  background: var(--bs-body-bg);
+}
+
+/* Soft colored lights drifting behind everything */
+.loader-blobs span {
+  position: absolute;
+  width: 42vmax;
+  height: 42vmax;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.5;
+  animation: loader-drift 14s ease-in-out infinite alternate;
+}
+
+.loader-blobs span:nth-child(1) {
+  top: -14vmax;
+  left: -10vmax;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.55), transparent 70%);
+}
+
+.loader-blobs span:nth-child(2) {
+  bottom: -16vmax;
+  right: -12vmax;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.45), transparent 70%);
+  animation-delay: -5s;
+}
+
+.loader-blobs span:nth-child(3) {
+  top: 30%;
+  left: 55%;
+  width: 26vmax;
+  height: 26vmax;
+  background: radial-gradient(circle, rgba(244, 114, 182, 0.3), transparent 70%);
+  animation-delay: -9s;
+}
+
+/* Robot in the middle of two spinning gradient rings */
+.loader-orbit {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 150px;
+  height: 150px;
+}
+
+.loader:not(.loader-fullscreen) .loader-orbit {
+  width: 104px;
+  height: 104px;
+}
+
+.loader-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  /* Gradient border: fill the padding box with the page color, the border box with the gradient */
+  background:
+    linear-gradient(var(--bs-body-bg), var(--bs-body-bg)) padding-box,
+    conic-gradient(from 0deg, transparent 0 25%, var(--mentora-violet), var(--mentora-cyan)) border-box;
+  animation: loader-spin 1.6s linear infinite;
+}
+
+.loader-ring-2 {
+  inset: 14px;
+  border-width: 2px;
+  opacity: 0.7;
+  animation-duration: 2.4s;
+  animation-direction: reverse;
+}
+
+.loader-orbit .bot {
+  position: relative;
+  z-index: 1;
+}
+
+.loader-halo {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  background: var(--mentora-gradient);
+  filter: blur(18px);
+  animation: pulse-glow 2.4s ease-in-out infinite;
+}
+
+/* Little moons circling the rings */
+.loader-dot {
+  position: absolute;
+  inset: -6px;
+  animation: loader-spin 3s linear infinite;
+}
+
+.loader-dot::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--mentora-cyan);
+  box-shadow: 0 0 12px var(--mentora-cyan);
+}
+
+.loader-dot-2 {
+  animation-duration: 4.5s;
+  animation-direction: reverse;
+}
+
+.loader-dot-2::before {
+  top: auto;
+  bottom: 0;
+  width: 7px;
+  height: 7px;
+  background: #fde68a;
+  box-shadow: 0 0 10px #f59e0b;
+}
+
+.loader-title {
+  position: relative;
+  margin: 0.6rem 0 0;
+  font-size: clamp(1.8rem, 6vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, var(--mentora-violet), var(--mentora-cyan), #f0abfc, var(--mentora-violet));
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: loader-shimmer 4s linear infinite, tagline-in 0.6s ease-out;
+}
+
+/* Fades in just after the title */
+.loader-caption {
+  position: relative;
+  margin: -0.5rem 0 0.4rem;
+  /* One line; the font shrinks on narrow phones so it still fits */
+  white-space: nowrap;
+  font-size: clamp(0.75rem, 3.4vw, 1.1rem);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--bs-body-color);
+  opacity: 0;
+  animation: tagline-in 0.6s ease-out 0.3s forwards;
+}
+
+.loader-message {
+  position: relative;
+  min-height: 1.5em;
+  margin: 0;
+  color: var(--bs-secondary-color);
+  animation: tagline-in 0.45s ease-out;
+}
+
+.loader-ellipsis span {
+  display: inline-block;
+  animation: typing 1.2s ease-in-out infinite;
+}
+
+.loader-ellipsis span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.loader-ellipsis span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* Indeterminate bar: a gradient streak sliding across */
+.loader-bar {
+  position: relative;
+  width: min(220px, 60vw);
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bs-secondary-bg);
+}
+
+.loader-bar span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--mentora-gradient);
+  box-shadow: 0 0 10px var(--mentora-violet);
+  animation: loader-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes loader-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes loader-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes loader-shimmer {
+  to { background-position: 300% 0; }
+}
+
+@keyframes loader-slide {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(260%); }
+}
+
+@keyframes loader-drift {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(6vmax, 4vmax) scale(1.15); }
+  100% { transform: translate(-4vmax, 7vmax) scale(0.95); }
+}
+
 /* Respect "reduce motion": no floating, blinking, jitter or sparkles */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -1023,6 +1253,10 @@ body {
 
   .bot-sparkle {
     opacity: 0.8;
+  }
+
+  .loader-caption {
+    opacity: 1;
   }
 }
 
@@ -1299,7 +1533,6 @@ body {
 .resume-drop:hover,
 .resume-drop:focus-visible {
   border-color: var(--mentora-violet);
-  background: var(--glow-1);
   outline: none;
 }
 

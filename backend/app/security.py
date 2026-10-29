@@ -42,6 +42,11 @@ def new_session_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def new_reset_code() -> str:
+    """6 random digits for a "forgot password" email."""
+    return f"{secrets.randbelow(10**6):06d}"
+
+
 def token_hash(token: str) -> str:
     """What the database stores for a login token."""
     return hashlib.sha256(token.encode()).hexdigest()

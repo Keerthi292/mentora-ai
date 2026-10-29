@@ -1,5 +1,6 @@
 """Business rules for accounts and logins: sign up, log in, log out, forgot password."""
 
+import hmac
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
@@ -10,7 +11,7 @@ from app.config import settings
 from app.models import User
 from app.repositories import password_reset_repository, session_repository, user_repository
 from app.schemas import LoginRequest, RegisterRequest, ResetPasswordRequest
-from app.security import hash_password, new_session_token, token_hash, verify_password
+from app.security import hash_password, new_reset_code, new_session_token, token_hash, verify_password
 
 
 def _email_taken() -> HTTPException:
@@ -54,35 +55,47 @@ def end_session(db: Session, token: str | None) -> None:
         session_repository.delete_session(db, token_hash(token))
 
 
+
 def request_password_reset(db: Session, email: str) -> tuple[str, str, str] | None:
-    """Make a reset link for the account with this email. Returns (to, subject, text) for
+    """Make a 6-digit code for the account with this email. Returns (to, subject, text) for
     the email, or None if there's no such account (the caller answers the same either way)."""
     user = user_repository.get_user_by_email(db, email)
     if user is None:
         return None
-    token = new_session_token()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.RESET_TOKEN_MINUTES)
-    password_reset_repository.replace_reset(db, token_hash(token), user.id, expires_at)
+    code = new_reset_code()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.RESET_CODE_MINUTES)
+    password_reset_repository.replace_reset(db, user.id, token_hash(code), expires_at)
 
-    link = f"{settings.APP_URL.rstrip('/')}/reset-password?token={token}"
     text = (
         f"Hi {user.full_name},\n\n"
-        "Someone (hopefully you) asked to reset your Mentora AI password. Open this link to choose a new one:\n\n"
-        f"{link}\n\n"
-        f"It works once, for {settings.RESET_TOKEN_MINUTES} minutes. "
+        "Someone (hopefully you) asked to reset your Mentora AI password. Enter this code in the app:\n\n"
+        f"    {code}\n\n"
+        f"It works once, for {settings.RESET_CODE_MINUTES} minutes. "
         "If you didn't ask for this, ignore this email: your password stays the same.\n"
     )
-    return user.email, "Reset your Mentora AI password", text
+    return user.email, f"{code} is your Mentora AI reset code", text
+
+
+def _wrong_code() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="That code is wrong or has expired. Check the email, or send a new code.",
+    )
 
 
 def reset_password(db: Session, payload: ResetPasswordRequest) -> User:
-    """Set a new password with a reset link's token. Every other login of the account ends."""
-    reset = password_reset_repository.get_valid_reset(db, token_hash(payload.token))
+    """Set a new password with the emailed code. Every other login of the account ends.
+    A wrong email, wrong code and expired code all get the same answer."""
+    user = user_repository.get_user_by_email(db, payload.email)
+    reset = password_reset_repository.get_reset(db, user.id) if user else None
     if reset is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This reset link is invalid or has expired. Ask for a new one.",
-        )
-    user = user_repository.get_user(db, reset.user_id)
-    password_reset_repository.delete_resets_and_sessions(db, user.id)
+        raise _wrong_code()
+    if reset.expires_at <= datetime.now(timezone.utc):
+        password_reset_repository.delete_reset(db, reset)
+        raise _wrong_code()
+    if not hmac.compare_digest(reset.code_hash, token_hash(payload.code.strip())):
+        password_reset_repository.count_wrong_try(db, reset, settings.RESET_CODE_ATTEMPTS)
+        raise _wrong_code()
+
+    password_reset_repository.delete_reset_and_sessions(db, user.id)
     return user_repository.update_user(db, user, {"password_hash": hash_password(payload.password)})

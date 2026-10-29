@@ -1659,6 +1659,28 @@ body {
   max-width: 420px;
 }
 
+/* The 6 boxes for a password reset code (pages/ForgotPasswordPage.jsx) */
+.code-input {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.5rem;
+}
+
+.code-box {
+  height: 3.2rem;
+  padding: 0;
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.code-box.filled {
+  border-color: var(--mentora-violet);
+  transform: translateY(-1px);
+}
+
 .logout-btn {
   border-radius: 999px;
   white-space: nowrap;

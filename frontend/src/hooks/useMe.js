@@ -44,8 +44,8 @@ const register = async (data) => {
   setState({ status: "in", me });
 };
 
-const resetPassword = async (token, password) => {
-  const me = await api.post("/api/auth/reset-password", { token, password });
+const resetPassword = async (email, code, password) => {
+  const me = await api.post("/api/auth/reset-password", { email, code, password });
   setState({ status: "in", me });
 };
 
@@ -72,7 +72,7 @@ function firstName(me) {
 /**
  * The logged-in user ({ id, full_name, email, theme }) and the login actions:
  * login(email, password), register({ full_name, email, password }),
- * resetPassword(token, password), logout(),
+ * resetPassword(email, code, password), logout(),
  * update({ full_name?, theme? }), retry() (after "offline").
  */
 function useMe() {

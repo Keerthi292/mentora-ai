@@ -131,8 +131,8 @@ def _uploads() -> str:
 
 def _email() -> str:
     if not email_configured():
-        return "off (no SMTP_HOST): reset links are printed in this terminal"
-    return f"{settings.SMTP_HOST}:{settings.SMTP_PORT}, reset links point to {settings.APP_URL}"
+        return "off (no SMTP_HOST): password reset codes are printed in this terminal"
+    return f"sends from {settings.SMTP_FROM or settings.SMTP_USER} via {settings.SMTP_HOST}:{settings.SMTP_PORT}"
 
 
 def _line(label: str, check: Callable[[], str]) -> bool:
